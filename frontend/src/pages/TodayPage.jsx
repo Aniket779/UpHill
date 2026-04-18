@@ -47,6 +47,7 @@ export default function TodayPage() {
   const [category, setCategory] = useState('general')
   const [tagsInput, setTagsInput] = useState('')
   const [goalId, setGoalId] = useState('')
+  const [breakdownLoading, setBreakdownLoading] = useState(false)
   const [filterCategory, setFilterCategory] = useState('all')
   const [loading, setLoading] = useState(true)
   const [patchingId, setPatchingId] = useState(null)
@@ -125,6 +126,56 @@ export default function TodayPage() {
     setTagsInput('')
     setGoalId('')
     await load()
+  }
+
+  async function breakIntoTasks() {
+    const goalText = title.trim()
+    if (!goalText || breakdownLoading) return
+    setBreakdownLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`${apiBase}/ai/breakdown`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goalText }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !Array.isArray(data.tasks)) {
+        setError(data.error || 'Could not break goal into tasks.')
+        return
+      }
+      const results = await Promise.all(
+        data.tasks.map((taskTitle) =>
+          fetch(`${apiBase}/tasks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: taskTitle,
+              priority,
+              date: todayLocalString(),
+              category,
+              tags: tagsInput
+                .split(',')
+                .map((t) => t.trim())
+                .filter(Boolean),
+              goalId: goalId || null,
+            }),
+          })
+        )
+      )
+      if (results.some((r) => !r.ok)) {
+        setError('Some generated tasks could not be saved.')
+        await load()
+        return
+      }
+      setTitle('')
+      setTagsInput('')
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not generate tasks.')
+    } finally {
+      setBreakdownLoading(false)
+    }
   }
 
   async function setCompleted(id, completed) {
@@ -219,6 +270,14 @@ export default function TodayPage() {
                   placeholder="What needs to happen today?"
                   className="w-full rounded-xl border border-slate-700/80 bg-slate-950/70 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-sky-500/45 focus:outline-none focus:ring-2 focus:ring-sky-500/15"
                 />
+                <button
+                  type="button"
+                  onClick={() => void breakIntoTasks()}
+                  disabled={breakdownLoading || !title.trim()}
+                  className="w-full rounded-xl border border-violet-700/40 bg-violet-950/35 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-900/45 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {breakdownLoading ? 'Breaking into tasks…' : 'Break this into tasks'}
+                </button>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex flex-wrap gap-2" role="group" aria-label="Priority">
                     {PRIORITIES.map((p) => (

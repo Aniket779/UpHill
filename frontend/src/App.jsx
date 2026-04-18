@@ -5,6 +5,7 @@ import WeeklyGoalsPage from './pages/WeeklyGoalsPage'
 import CoachPage from './pages/CoachPage'
 import ChatPage from './pages/ChatPage'
 import InsightsPage from './pages/InsightsPage'
+import FocusPage from './pages/FocusPage'
 
 function Layout() {
   return (
@@ -55,6 +56,18 @@ function Layout() {
                 }
               >
                 Chat
+              </NavLink>
+              <NavLink
+                to="/focus"
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide transition lg:text-left ${
+                    isActive
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'text-slate-500 hover:bg-slate-900 hover:text-slate-300'
+                  }`
+                }
+              >
+                Focus
               </NavLink>
               <NavLink
                 to="/coach"
@@ -110,6 +123,7 @@ export default function App() {
         <Route index element={<TodayPage />} />
         <Route path="weekly" element={<WeeklyGoalsPage />} />
         <Route path="chat" element={<ChatPage />} />
+        <Route path="focus" element={<FocusPage />} />
         <Route path="coach" element={<CoachPage />} />
         <Route path="insights" element={<InsightsPage />} />
         <Route path="habits" element={<HabitsPage />} />
