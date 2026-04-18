@@ -1,6 +1,7 @@
 import { NavLink, Outlet, Route, Routes } from 'react-router-dom'
 import HabitsPage from './pages/HabitsPage'
 import TodayPage from './pages/TodayPage'
+import WeeklyGoalsPage from './pages/WeeklyGoalsPage'
 
 function Layout() {
   return (
@@ -27,6 +28,18 @@ function Layout() {
                 }
               >
                 Today
+              </NavLink>
+              <NavLink
+                to="/weekly"
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide transition lg:text-left ${
+                    isActive
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'text-slate-500 hover:bg-slate-900 hover:text-slate-300'
+                  }`
+                }
+              >
+                Weekly
               </NavLink>
               <NavLink
                 to="/habits"
@@ -56,6 +69,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<TodayPage />} />
+        <Route path="weekly" element={<WeeklyGoalsPage />} />
         <Route path="habits" element={<HabitsPage />} />
       </Route>
     </Routes>

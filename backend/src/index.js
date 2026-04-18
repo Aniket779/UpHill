@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const habitsRouter = require('./routes/habits');
 const tasksRouter = require('./routes/tasks');
+const goalsRouter = require('./routes/goals');
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.get('/health', (_req, res) => {
 
 app.use('/habits', habitsRouter);
 app.use('/tasks', tasksRouter);
+app.use('/goals', goalsRouter);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
