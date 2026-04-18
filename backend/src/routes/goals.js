@@ -21,7 +21,17 @@ function weekStartMondayLocal(ref = new Date()) {
 
 function clampProgress(n) {
   if (Number.isNaN(n) || typeof n !== 'number') return 0;
-  return Math.min(100, Math.max(0, Math.round(n)));
+  return Math.max(0, Math.round(n));
+}
+
+function clampTarget(n) {
+  if (Number.isNaN(n) || typeof n !== 'number') return 100;
+  return Math.max(1, Math.round(n));
+}
+
+function parseObjectIdList(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((v) => typeof v === 'string' && mongoose.Types.ObjectId.isValid(v));
 }
 
 router.post('/', async (req, res) => {
@@ -35,8 +45,11 @@ router.post('/', async (req, res) => {
   }
   const progress =
     typeof req.body?.progress === 'number' ? clampProgress(req.body.progress) : 0;
+  const target = typeof req.body?.target === 'number' ? clampTarget(req.body.target) : 100;
+  const taskIds = parseObjectIdList(req.body?.taskIds);
+  const habitIds = parseObjectIdList(req.body?.habitIds);
 
-  const goal = await Goal.create({ title, progress, weekStartDate });
+  const goal = await Goal.create({ title, progress, target, weekStartDate, taskIds, habitIds });
   return res.status(201).json(goal);
 });
 
@@ -51,14 +64,19 @@ router.patch('/:id', async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ error: 'invalid goal id' });
   }
-  if (typeof req.body?.progress !== 'number') {
-    return res.status(400).json({ error: 'progress (number) is required' });
+  const patch = {};
+  if (typeof req.body?.progress === 'number') patch.progress = clampProgress(req.body.progress);
+  if (typeof req.body?.target === 'number') patch.target = clampTarget(req.body.target);
+  if (req.body?.taskIds !== undefined) patch.taskIds = parseObjectIdList(req.body.taskIds);
+  if (req.body?.habitIds !== undefined) patch.habitIds = parseObjectIdList(req.body.habitIds);
+  if (typeof req.body?.title === 'string' && req.body.title.trim()) patch.title = req.body.title.trim();
+  if (Object.keys(patch).length === 0) {
+    return res.status(400).json({ error: 'no valid fields to update' });
   }
-  const progress = clampProgress(req.body.progress);
   const week = weekStartMondayLocal();
   const goal = await Goal.findOneAndUpdate(
     { _id: id, weekStartDate: week },
-    { progress },
+    patch,
     { new: true }
   ).lean();
   if (!goal) {

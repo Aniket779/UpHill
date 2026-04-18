@@ -22,6 +22,23 @@ function resolveDateParam(raw) {
   return { ok: false, error: 'date must be "today" or YYYY-MM-DD' };
 }
 
+function parseTags(raw) {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((t) => (typeof t === 'string' ? t.trim() : ''))
+      .filter(Boolean)
+      .slice(0, 12);
+  }
+  if (typeof raw === 'string') {
+    return raw
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 12);
+  }
+  return [];
+}
+
 router.post('/', async (req, res) => {
   const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
   if (!title) {
@@ -29,6 +46,15 @@ router.post('/', async (req, res) => {
   }
   const p = req.body?.priority;
   const priority = p === 'low' || p === 'medium' || p === 'high' ? p : 'medium';
+  const category =
+    typeof req.body?.category === 'string' && req.body.category.trim()
+      ? req.body.category.trim().toLowerCase()
+      : 'general';
+  const tags = parseTags(req.body?.tags);
+  const goalId =
+    typeof req.body?.goalId === 'string' && mongoose.Types.ObjectId.isValid(req.body.goalId)
+      ? req.body.goalId
+      : null;
   const dateParam = resolveDateParam(req.body?.date);
   if (!dateParam.ok) {
     return res.status(400).json({ error: dateParam.error });
@@ -40,6 +66,9 @@ router.post('/', async (req, res) => {
     completed: false,
     priority,
     date,
+    category,
+    tags,
+    goalId,
   });
   return res.status(201).json(task);
 });
@@ -49,7 +78,11 @@ router.get('/', async (req, res) => {
   if (!resolved.ok) {
     return res.status(400).json({ error: resolved.error });
   }
-  const tasks = await Task.find({ date: resolved.date }).lean();
+  const query = { date: resolved.date };
+  if (typeof req.query.category === 'string' && req.query.category.trim()) {
+    query.category = req.query.category.trim().toLowerCase();
+  }
+  const tasks = await Task.find(query).lean();
   const rank = { high: 0, medium: 1, low: 2 };
   tasks.sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
@@ -63,14 +96,22 @@ router.patch('/:id', async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ error: 'invalid task id' });
   }
-  if (typeof req.body?.completed !== 'boolean') {
-    return res.status(400).json({ error: 'completed (boolean) is required' });
+  const patch = {};
+  if (typeof req.body?.completed === 'boolean') patch.completed = req.body.completed;
+  if (typeof req.body?.category === 'string') {
+    patch.category = req.body.category.trim().toLowerCase() || 'general';
   }
-  const task = await Task.findByIdAndUpdate(
-    id,
-    { completed: req.body.completed },
-    { new: true }
-  ).lean();
+  if (req.body?.tags !== undefined) {
+    patch.tags = parseTags(req.body.tags);
+  }
+  if (typeof req.body?.goalId === 'string' && mongoose.Types.ObjectId.isValid(req.body.goalId)) {
+    patch.goalId = req.body.goalId;
+  }
+  if (req.body?.goalId === null) patch.goalId = null;
+  if (Object.keys(patch).length === 0) {
+    return res.status(400).json({ error: 'no valid fields to update' });
+  }
+  const task = await Task.findByIdAndUpdate(id, patch, { new: true }).lean();
   if (!task) {
     return res.status(404).json({ error: 'task not found' });
   }
