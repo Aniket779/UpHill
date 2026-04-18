@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const habitsRouter = require('./routes/habits');
+const tasksRouter = require('./routes/tasks');
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/habits', habitsRouter);
+app.use('/tasks', tasksRouter);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
