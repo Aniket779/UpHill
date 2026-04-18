@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const habitsRouter = require('./routes/habits');
 const tasksRouter = require('./routes/tasks');
 const goalsRouter = require('./routes/goals');
+const aiRoutes = require('./routes/ai');
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ app.get('/health', (_req, res) => {
 app.use('/habits', habitsRouter);
 app.use('/tasks', tasksRouter);
 app.use('/goals', goalsRouter);
+app.use('/ai', aiRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

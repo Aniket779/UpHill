@@ -9,6 +9,7 @@ export default defineConfig({
       '/habits': { target: 'http://localhost:5000', changeOrigin: true },
       '/tasks': { target: 'http://localhost:5000', changeOrigin: true },
       '/goals': { target: 'http://localhost:5000', changeOrigin: true },
+      '/ai': { target: 'http://localhost:5000', changeOrigin: true },
       '/health': { target: 'http://localhost:5000', changeOrigin: true },
     },
   },
