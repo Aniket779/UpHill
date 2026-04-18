@@ -41,15 +41,22 @@ function priorityStyles(priority, completed) {
 
 export default function TodayPage() {
   const [tasks, setTasks] = useState([])
+  const [goals, setGoals] = useState([])
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState('medium')
+  const [category, setCategory] = useState('general')
+  const [tagsInput, setTagsInput] = useState('')
+  const [goalId, setGoalId] = useState('')
+  const [filterCategory, setFilterCategory] = useState('all')
   const [loading, setLoading] = useState(true)
   const [patchingId, setPatchingId] = useState(null)
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
     setError(null)
-    const res = await fetch(`${apiBase}/tasks?date=today`)
+    const qp = new URLSearchParams({ date: 'today' })
+    if (filterCategory !== 'all') qp.set('category', filterCategory)
+    const res = await fetch(`${apiBase}/tasks?${qp.toString()}`)
     if (!res.ok) {
       setError('Could not load today’s tasks.')
       setTasks([])
@@ -57,7 +64,7 @@ export default function TodayPage() {
     }
     const data = await res.json()
     setTasks(data)
-  }, [])
+  }, [filterCategory])
 
   useEffect(() => {
     let cancelled = false
@@ -71,6 +78,23 @@ export default function TodayPage() {
     }
   }, [load])
 
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`${apiBase}/goals`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled && Array.isArray(data)) setGoals(data)
+      } catch {
+        if (!cancelled) setGoals([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   async function addTask(e) {
     e.preventDefault()
     const trimmed = title.trim()
@@ -83,6 +107,12 @@ export default function TodayPage() {
         title: trimmed,
         priority,
         date: todayLocalString(),
+        category,
+        tags: tagsInput
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
+        goalId: goalId || null,
       }),
     })
     if (!res.ok) {
@@ -91,6 +121,9 @@ export default function TodayPage() {
     }
     setTitle('')
     setPriority('medium')
+    setCategory('general')
+    setTagsInput('')
+    setGoalId('')
     await load()
   }
 
@@ -125,6 +158,11 @@ export default function TodayPage() {
   const open = tasks.filter((t) => !t.completed)
   const done = tasks.filter((t) => t.completed)
   const highOpen = open.filter((t) => t.priority === 'high').length
+  const categoryOptions = useMemo(() => {
+    const s = new Set(['general', 'work', 'health', 'study', 'personal'])
+    tasks.forEach((t) => t.category && s.add(t.category))
+    return [...s]
+  }, [tasks])
 
   const remindersReloadKey = useMemo(
     () => tasks.map((t) => `${t._id}:${t.completed}`).join('|'),
@@ -209,7 +247,54 @@ export default function TodayPage() {
                     Add to today
                   </button>
                 </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-200 focus:border-sky-500/45 focus:outline-none focus:ring-2 focus:ring-sky-500/15"
+                  >
+                    <option value="general">general</option>
+                    <option value="work">work</option>
+                    <option value="health">health</option>
+                    <option value="study">study</option>
+                    <option value="personal">personal</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={tagsInput}
+                    onChange={(e) => setTagsInput(e.target.value)}
+                    placeholder="tags: deep work, gym"
+                    className="w-full rounded-xl border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-sky-500/45 focus:outline-none focus:ring-2 focus:ring-sky-500/15"
+                  />
+                  <select
+                    value={goalId}
+                    onChange={(e) => setGoalId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-200 focus:border-sky-500/45 focus:outline-none focus:ring-2 focus:ring-sky-500/15"
+                  >
+                    <option value="">no goal</option>
+                    {goals.map((g) => (
+                      <option key={g._id} value={g._id}>
+                        {g.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </form>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs uppercase tracking-wider text-slate-500">Filter category</span>
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200"
+              >
+                <option value="all">all</option>
+                {categoryOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {error && (
@@ -263,6 +348,12 @@ export default function TodayPage() {
                               </div>
                               <p className="mt-2 text-sm font-medium leading-snug text-white">
                                 {t.title}
+                              </p>
+                              <p className="mt-1 text-[11px] text-slate-500">
+                                {t.category || 'general'}
+                                {Array.isArray(t.tags) && t.tags.length > 0
+                                  ? ` · #${t.tags.join(' #')}`
+                                  : ''}
                               </p>
                             </div>
                             <button

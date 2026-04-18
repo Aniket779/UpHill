@@ -1,4 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -10,6 +19,8 @@ export default function InsightsPage() {
   const [weekly, setWeekly] = useState(null)
   const [weeklyLoading, setWeeklyLoading] = useState(false)
   const [weeklyError, setWeeklyError] = useState(null)
+  const [analytics, setAnalytics] = useState(null)
+  const [analyticsError, setAnalyticsError] = useState(null)
 
   const loadWeeklyReport = useCallback(async () => {
     setWeeklyError(null)
@@ -47,6 +58,33 @@ export default function InsightsPage() {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Network error.')
       } finally {
         if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setAnalyticsError(null)
+      try {
+        const res = await fetch(`${apiBase}/analytics/summary`)
+        const json = await res.json().catch(() => ({}))
+        if (!cancelled) {
+          if (!res.ok) {
+            setAnalyticsError(json.error || 'Could not load analytics summary.')
+            setAnalytics(null)
+          } else {
+            setAnalytics(json)
+          }
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setAnalyticsError(e instanceof Error ? e.message : 'Network error.')
+          setAnalytics(null)
+        }
       }
     })()
     return () => {
@@ -135,6 +173,68 @@ export default function InsightsPage() {
                   Window: {weekly.weekDays[0]} → {weekly.weekDays[weekly.weekDays.length - 1]}
                 </p>
               )}
+            </div>
+          )}
+        </section>
+
+        <section className="mb-10 rounded-2xl border border-cyan-900/35 bg-slate-900/45 p-6 shadow-xl shadow-black/20">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-cyan-200/90">
+              Analytics summary
+            </h2>
+            {analytics && (
+              <p className="text-xs text-slate-500">
+                Tasks: <span className="text-slate-300">{analytics.totalTasks}</span> · Completed:{' '}
+                <span className="text-emerald-300">{analytics.completedPercent}%</span> · Avg streak:{' '}
+                <span className="text-orange-300">{analytics.streakAvg}</span>
+              </p>
+            )}
+          </div>
+          {analyticsError && (
+            <p className="mb-4 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+              {analyticsError}
+            </p>
+          )}
+          {analytics && (
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-4">
+                <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Completion rate graph
+                </h3>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={analytics.completionRateGraph || []}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis dataKey="day" stroke="#64748b" />
+                      <YAxis domain={[0, 100]} stroke="#64748b" />
+                      <Tooltip
+                        contentStyle={{ background: '#020617', border: '1px solid #334155' }}
+                        labelStyle={{ color: '#cbd5e1' }}
+                      />
+                      <Line type="monotone" dataKey="rate" stroke="#22d3ee" strokeWidth={2.5} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-4">
+                <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Streak trend
+                </h3>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={analytics.streakTrend || []}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis dataKey="day" stroke="#64748b" />
+                      <YAxis domain={[0, 100]} stroke="#64748b" />
+                      <Tooltip
+                        contentStyle={{ background: '#020617', border: '1px solid #334155' }}
+                        labelStyle={{ color: '#cbd5e1' }}
+                      />
+                      <Line type="monotone" dataKey="value" stroke="#f59e0b" strokeWidth={2.5} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </div>
           )}
         </section>

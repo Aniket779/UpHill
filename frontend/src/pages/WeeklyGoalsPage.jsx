@@ -80,6 +80,7 @@ export default function WeeklyGoalsPage() {
 
   const [goals, setGoals] = useState([])
   const [title, setTitle] = useState('')
+  const [target, setTarget] = useState(100)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [savingId, setSavingId] = useState(null)
@@ -112,7 +113,13 @@ export default function WeeklyGoalsPage() {
 
   const avgProgress = useMemo(() => {
     if (!goals.length) return 0
-    return Math.round(goals.reduce((s, g) => s + clamp(g.progress), 0) / goals.length)
+    return Math.round(
+      goals.reduce((s, g) => {
+        const t = Math.max(1, Number(g.target) || 100)
+        const p = clamp(g.progress)
+        return s + Math.round((p / t) * 100)
+      }, 0) / goals.length
+    )
   }, [goals])
 
   async function addGoal(e) {
@@ -123,13 +130,14 @@ export default function WeeklyGoalsPage() {
     const res = await fetch(`${apiBase}/goals`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: trimmed }),
+      body: JSON.stringify({ title: trimmed, target }),
     })
     if (!res.ok) {
       setError('Could not create goal.')
       return
     }
     setTitle('')
+    setTarget(100)
     await load()
   }
 
@@ -209,6 +217,14 @@ export default function WeeklyGoalsPage() {
               placeholder="e.g. Ship v1 of the planner"
               className="min-w-0 flex-1 rounded-xl border border-slate-700/80 bg-slate-950/70 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-violet-500/45 focus:outline-none focus:ring-2 focus:ring-violet-500/15"
             />
+                <input
+                  type="number"
+                  min={1}
+                  value={target}
+                  onChange={(e) => setTarget(Math.max(1, Number(e.target.value) || 1))}
+                  className="w-28 rounded-xl border border-slate-700/80 bg-slate-950/70 px-3 py-3 text-sm text-white focus:border-violet-500/45 focus:outline-none focus:ring-2 focus:ring-violet-500/15"
+                  aria-label="Goal target"
+                />
             <button
               type="submit"
               className="shrink-0 rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 active:bg-violet-700"
@@ -237,6 +253,8 @@ export default function WeeklyGoalsPage() {
           <ul className="space-y-5">
             {goals.map((g) => {
               const val = displayProgress(g)
+              const targetValue = Math.max(1, Number(g.target) || 100)
+              const pct = Math.min(100, Math.round((val / targetValue) * 100))
               const busy = savingId === g._id
               return (
                 <li
@@ -246,7 +264,9 @@ export default function WeeklyGoalsPage() {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium leading-snug text-white">{g.title}</p>
-                      <p className="mt-1 text-xs text-slate-500">Manual progress · 0–100</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Progress: {val}/{targetValue} ({pct}%)
+                      </p>
                     </div>
                     <div className="flex items-center gap-2 sm:shrink-0">
                       <label className="sr-only" htmlFor={`pct-${g._id}`}>
@@ -256,7 +276,7 @@ export default function WeeklyGoalsPage() {
                         id={`pct-${g._id}`}
                         type="number"
                         min={0}
-                        max={100}
+                        max={targetValue}
                         value={val}
                         disabled={busy}
                         onChange={(e) =>
@@ -276,19 +296,19 @@ export default function WeeklyGoalsPage() {
                         }}
                         className="w-20 rounded-lg border border-slate-700 bg-slate-950/80 px-2 py-2 text-center text-sm font-semibold tabular-nums text-white focus:border-violet-500/50 focus:outline-none focus:ring-2 focus:ring-violet-500/15 disabled:opacity-50"
                       />
-                      <span className="text-sm font-medium text-slate-500">%</span>
+                      <span className="text-sm font-medium text-slate-500">pts</span>
                     </div>
                   </div>
                   <div className="mt-4 space-y-2">
                     <div className="flex items-center justify-between text-xs text-slate-500">
                       <span>Progress</span>
-                      <span className="tabular-nums text-slate-400">{val}%</span>
+                      <span className="tabular-nums text-slate-400">{val}/{targetValue}</span>
                     </div>
-                    <ProgressBar value={val} busy={busy} />
+                    <ProgressBar value={pct} busy={busy} />
                     <input
                       type="range"
                       min={0}
-                      max={100}
+                      max={targetValue}
                       value={val}
                       disabled={busy}
                       onChange={(e) => {
