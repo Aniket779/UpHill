@@ -6,6 +6,7 @@ const habitsRouter = require('./routes/habits');
 const tasksRouter = require('./routes/tasks');
 const goalsRouter = require('./routes/goals');
 const aiRoutes = require('./routes/ai');
+const insightsRouter = require('./routes/insights');
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ app.get('/health', (_req, res) => {
 app.use('/habits', habitsRouter);
 app.use('/tasks', tasksRouter);
 app.use('/goals', goalsRouter);
+app.use('/insights', insightsRouter);
 app.use('/ai', aiRoutes);
 
 app.listen(PORT, () => {
