@@ -3,6 +3,7 @@ import HabitsPage from './pages/HabitsPage'
 import TodayPage from './pages/TodayPage'
 import WeeklyGoalsPage from './pages/WeeklyGoalsPage'
 import CoachPage from './pages/CoachPage'
+import ChatPage from './pages/ChatPage'
 
 function Layout() {
   return (
@@ -43,6 +44,18 @@ function Layout() {
                 Weekly
               </NavLink>
               <NavLink
+                to="/chat"
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide transition lg:text-left ${
+                    isActive
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'text-slate-500 hover:bg-slate-900 hover:text-slate-300'
+                  }`
+                }
+              >
+                Chat
+              </NavLink>
+              <NavLink
                 to="/coach"
                 className={({ isActive }) =>
                   `rounded-lg px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide transition lg:text-left ${
@@ -69,7 +82,7 @@ function Layout() {
             </nav>
           </div>
         </aside>
-        <div className="min-w-0 flex-1 border-slate-800/60 lg:border-l">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col border-slate-800/60 lg:h-screen lg:border-l">
           <Outlet />
         </div>
       </div>
@@ -83,6 +96,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<TodayPage />} />
         <Route path="weekly" element={<WeeklyGoalsPage />} />
+        <Route path="chat" element={<ChatPage />} />
         <Route path="coach" element={<CoachPage />} />
         <Route path="habits" element={<HabitsPage />} />
       </Route>
