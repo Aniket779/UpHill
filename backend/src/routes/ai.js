@@ -1,7 +1,11 @@
 const express = require('express');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const CoachChatSession = require('../models/CoachChatSession');
+const Feedback = require('../models/Feedback');
+const Task = require('../models/Task');
+const Habit = require('../models/Habit');
 
 const router = express.Router();
 
@@ -99,11 +103,148 @@ router.post('/feedback', async (req, res) => {
       return res.status(502).json({ error: 'The model returned an empty message.' });
     }
 
-    return res.json({ feedback });
+    let userId = 'anonymous';
+    const rawUid = body.userId;
+    if (typeof rawUid === 'string' && rawUid.trim()) {
+      const u = rawUid.trim();
+      userId = mongoose.Types.ObjectId.isValid(u) ? new mongoose.Types.ObjectId(u) : u;
+    }
+
+    const saved = await Feedback.create({ userId, text: feedback });
+    const savedDoc = saved.toObject();
+    if (savedDoc._id) savedDoc._id = String(savedDoc._id);
+
+    return res.json({
+      feedback,
+      saved: savedDoc,
+    });
   } catch (err) {
     console.error('AI feedback error:', err);
     return res.status(500).json({
       error: 'Failed to generate feedback.',
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+router.get('/feedback-history', async (_req, res) => {
+  try {
+    const items = await Feedback.find()
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+    const rows = items.map((doc) => ({
+      _id: String(doc._id),
+      userId: doc.userId,
+      text: doc.text,
+      createdAt: doc.createdAt,
+    }));
+    return res.json({ items: rows });
+  } catch (err) {
+    console.error('AI feedback-history error:', err);
+    return res.status(500).json({ error: 'Failed to load feedback history.' });
+  }
+});
+
+function last7DayStrings() {
+  const days = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    days.push(`${y}-${m}-${day}`);
+  }
+  return days;
+}
+
+function parseWeeklyReportJson(raw) {
+  let t = typeof raw === 'string' ? raw.trim() : '';
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) t = fence[1].trim();
+  const j = JSON.parse(t);
+  const improvements = Array.isArray(j.improvements) ? j.improvements.map((x) => String(x)) : [];
+  while (improvements.length < 3) improvements.push('');
+  return {
+    whatWentWell: String(j.whatWentWell ?? ''),
+    whatFailed: String(j.whatFailed ?? ''),
+    improvements: improvements.slice(0, 3),
+  };
+}
+
+router.get('/weekly-report', async (_req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || !String(apiKey).trim()) {
+    return res.status(503).json({ error: 'GEMINI_API_KEY not configured.' });
+  }
+
+  try {
+    const days = last7DayStrings();
+    const [tasks, habits] = await Promise.all([
+      Task.find({ date: { $in: days } }).sort({ date: 1 }).lean(),
+      Habit.find().lean(),
+    ]);
+
+    const habitSummaries = habits.map((h) => ({
+      name: h.name,
+      streak: h.streak ?? 0,
+      logsLast7Days: (h.logs || []).filter((l) => days.includes(l.date)),
+    }));
+
+    const payload = {
+      calendarDays: days,
+      tasks: tasks.map((t) => ({
+        date: t.date,
+        title: t.title,
+        completed: t.completed,
+        priority: t.priority,
+      })),
+      habits: habitSummaries,
+    };
+
+    const prompt = `You are a strict, disciplined performance coach. Review the user's last 7 calendar days of tasks and habit logs.
+
+Data (JSON):
+${JSON.stringify(payload, null, 2)}
+
+Respond with ONLY valid JSON (no markdown code fences) in exactly this shape:
+{"whatWentWell":"string","whatFailed":"string","improvements":["one","two","three"]}
+
+Rules:
+- whatWentWell: concrete positives grounded in the data.
+- whatFailed: honest gaps (missed habits, incomplete tasks, inconsistency).
+- improvements: exactly 3 short, actionable improvements for next week.`;
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: MODEL_ID });
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = typeof response.text === 'function' ? response.text().trim() : '';
+
+    if (!text) {
+      return res.status(502).json({ error: 'The model returned an empty message.' });
+    }
+
+    let report;
+    try {
+      report = parseWeeklyReportJson(text);
+    } catch (e) {
+      console.error('weekly-report parse error:', e, text.slice(0, 600));
+      return res.status(502).json({
+        error: 'Could not parse weekly report JSON.',
+        detail: e instanceof Error ? e.message : String(e),
+      });
+    }
+
+    return res.json({
+      weekDays: days,
+      report,
+    });
+  } catch (err) {
+    console.error('weekly-report error:', err);
+    return res.status(500).json({
+      error: 'Failed to generate weekly report.',
       detail: err instanceof Error ? err.message : String(err),
     });
   }

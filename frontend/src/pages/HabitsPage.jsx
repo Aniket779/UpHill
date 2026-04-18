@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { todayLocalString } from '../utils/date'
+import RemindersBanner from '../components/RemindersBanner'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -77,6 +78,17 @@ export default function HabitsPage() {
     }
   }
 
+  const remindersReloadKey = useMemo(
+    () =>
+      habits
+        .map((h) => {
+          const log = todayLog(h)
+          return `${h._id}:${log?.status ?? 'none'}`
+        })
+        .join('|'),
+    [habits]
+  )
+
   return (
     <div className="px-4 py-8 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-2xl">
@@ -86,6 +98,8 @@ export default function HabitsPage() {
             Build streaks by logging each habit once per day. Today&apos;s status updates instantly.
           </p>
         </header>
+
+        <RemindersBanner topics={['habits']} reloadKey={remindersReloadKey} page="habits" />
 
         <form
           onSubmit={addHabit}
@@ -132,7 +146,16 @@ export default function HabitsPage() {
                   className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800/80 bg-slate-900/40 px-5 py-4 backdrop-blur-sm"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-white">{h.name}</p>
+                    <p className="flex flex-wrap items-center gap-2 truncate font-medium text-white">
+                      <span className="truncate">{h.name}</span>
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-orange-500/30 bg-orange-950/40 px-2 py-0.5 text-xs font-semibold tabular-nums text-orange-100"
+                        title="Current streak (consecutive done days)"
+                      >
+                        <span aria-hidden>🔥</span>
+                        {h.streak ?? 0}
+                      </span>
+                    </p>
                     <p className="mt-1 text-xs text-slate-500">
                       {doneToday ? (
                         <span className="text-emerald-400/90">Done today</span>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -6,6 +6,30 @@ export default function InsightsPage() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  const [weekly, setWeekly] = useState(null)
+  const [weeklyLoading, setWeeklyLoading] = useState(false)
+  const [weeklyError, setWeeklyError] = useState(null)
+
+  const loadWeeklyReport = useCallback(async () => {
+    setWeeklyError(null)
+    setWeeklyLoading(true)
+    try {
+      const res = await fetch(`${apiBase}/ai/weekly-report`)
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setWeeklyError(json.detail || json.error || 'Could not load weekly report.')
+        setWeekly(null)
+        return
+      }
+      setWeekly(json)
+    } catch (e) {
+      setWeeklyError(e instanceof Error ? e.message : 'Network error.')
+      setWeekly(null)
+    } finally {
+      setWeeklyLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -55,6 +79,65 @@ export default function InsightsPage() {
             .
           </p>
         </header>
+
+        <section className="mb-10 rounded-2xl border border-violet-900/35 bg-gradient-to-br from-violet-950/40 via-slate-900/50 to-slate-950/80 p-6 shadow-xl shadow-black/25">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-violet-200/90">
+                Weekly report (AI)
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Last 7 days of tasks + habit logs, summarized by Gemini.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={weeklyLoading}
+              onClick={() => void loadWeeklyReport()}
+              className="shrink-0 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {weeklyLoading ? 'Generating…' : weekly ? 'Regenerate' : 'Generate weekly report'}
+            </button>
+          </div>
+
+          {weeklyError && (
+            <p className="mt-4 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" role="alert">
+              {weeklyError}
+            </p>
+          )}
+
+          {weekly?.report && (
+            <div className="mt-6 space-y-5 border-t border-slate-800/80 pt-6">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400/90">
+                  What went well
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-200">{weekly.report.whatWentWell}</p>
+              </div>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-rose-400/90">
+                  What failed
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-200">{weekly.report.whatFailed}</p>
+              </div>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300/90">
+                  3 improvements
+                </h3>
+                <ul className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-200">
+                  {(weekly.report.improvements || []).map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+              {weekly.weekDays && (
+                <p className="text-[10px] text-slate-600">
+                  Window: {weekly.weekDays[0]} → {weekly.weekDays[weekly.weekDays.length - 1]}
+                </p>
+              )}
+            </div>
+          )}
+        </section>
 
         {loading && <p className="text-sm text-slate-500">Analyzing habits…</p>}
 

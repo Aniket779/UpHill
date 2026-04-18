@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatTodayHeading, todayLocalString } from '../utils/date'
+import RemindersBanner from '../components/RemindersBanner'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -125,6 +126,11 @@ export default function TodayPage() {
   const done = tasks.filter((t) => t.completed)
   const highOpen = open.filter((t) => t.priority === 'high').length
 
+  const remindersReloadKey = useMemo(
+    () => tasks.map((t) => `${t._id}:${t.completed}`).join('|'),
+    [tasks]
+  )
+
   return (
     <div className="px-4 py-8 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-4xl">
@@ -160,6 +166,8 @@ export default function TodayPage() {
             </div>
           </dl>
         </header>
+
+        <RemindersBanner topics="all" reloadKey={remindersReloadKey} />
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
           <section className="space-y-6">

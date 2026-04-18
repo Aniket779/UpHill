@@ -1,7 +1,33 @@
 const express = require('express');
 const Habit = require('../models/Habit');
+const Task = require('../models/Task');
 
 const router = express.Router();
+
+function addDaysYmd(ymd, deltaDays) {
+  const [y, mo, da] = ymd.split('-').map(Number);
+  const dt = new Date(y, mo - 1, da);
+  dt.setDate(dt.getDate() + deltaDays);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+function countDoneCalendarStreakFrom(logs, endYmd) {
+  const map = new Map((logs || []).map((l) => [l.date, l.status]));
+  let count = 0;
+  let cur = endYmd;
+  for (;;) {
+    if (map.get(cur) === 'done') {
+      count += 1;
+      cur = addDaysYmd(cur, -1);
+    } else {
+      break;
+    }
+  }
+  return count;
+}
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -41,6 +67,78 @@ function countStreakBreaks(sortedLogs) {
 function sortLogsByDate(logs) {
   return [...(logs || [])].sort((a, b) => a.date.localeCompare(b.date));
 }
+
+/** Smart reminder copy for Today / Habits banners (GET /insights/reminders). */
+router.get('/reminders', async (_req, res) => {
+  try {
+    const today = todayLocalString();
+    const yesterday = addDaysYmd(today, -1);
+
+    const [tasks, habits] = await Promise.all([
+      Task.find({ date: today }).lean(),
+      Habit.find().lean(),
+    ]);
+
+    const openHigh = tasks.filter((t) => !t.completed && t.priority === 'high');
+    const completedToday = tasks.filter((t) => t.completed).length;
+    const hasTasksToday = tasks.length > 0;
+
+    const streakAtRisk = [];
+    for (const h of habits) {
+      const logs = h.logs || [];
+      const todayLog = logs.find((l) => l.date === today);
+      if (!todayLog) {
+        const streakThroughYesterday = countDoneCalendarStreakFrom(logs, yesterday);
+        if (streakThroughYesterday >= 2) {
+          streakAtRisk.push(h.name);
+        }
+      }
+    }
+
+    const messages = [];
+
+    if (openHigh.length > 0) {
+      messages.push({
+        code: 'AVOIDING_IMPORTANT',
+        topic: 'tasks',
+        level: 'warning',
+        text: 'You are avoiding important work',
+      });
+    }
+
+    if (hasTasksToday && completedToday === 0) {
+      messages.push({
+        code: 'NOT_STARTED',
+        topic: 'tasks',
+        level: 'warning',
+        text: "You haven't started yet",
+      });
+    }
+
+    if (streakAtRisk.length > 0) {
+      messages.push({
+        code: 'STREAK_AT_RISK',
+        topic: 'habits',
+        level: 'warning',
+        text: 'Your streak is at risk',
+      });
+    }
+
+    const emptyHint =
+      messages.length === 0
+        ? "You're on track — no urgent nudges from today's rules."
+        : null;
+
+    return res.json({
+      asOfDate: today,
+      messages,
+      emptyHint,
+    });
+  } catch (err) {
+    console.error('GET /insights/reminders error:', err);
+    return res.status(500).json({ error: 'Failed to load insight reminders.' });
+  }
+});
 
 router.get('/', async (req, res) => {
   try {
