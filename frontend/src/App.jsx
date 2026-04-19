@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Route, Routes } from 'react-router-dom'
+import { NavLink, Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom'
 import HabitsPage from './pages/HabitsPage'
 import TodayPage from './pages/TodayPage'
 import WeeklyGoalsPage from './pages/WeeklyGoalsPage'
@@ -6,17 +6,36 @@ import CoachPage from './pages/CoachPage'
 import ChatPage from './pages/ChatPage'
 import InsightsPage from './pages/InsightsPage'
 import FocusPage from './pages/FocusPage'
+import AuthPage from './pages/AuthPage'
+import { clearToken, getToken } from './lib/auth'
 
 function Layout() {
+  const navigate = useNavigate()
+  const token = getToken()
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="flex min-h-screen flex-col lg:flex-row">
         <aside className="border-b border-slate-800/80 bg-slate-950/95 px-4 py-4 lg:w-56 lg:shrink-0 lg:border-b-0 lg:border-r lg:py-10">
           <div className="flex items-center justify-between gap-4 lg:flex-col lg:items-stretch">
             <div className="lg:px-2">
-              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-emerald-400/90">
-                GrindOS
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-emerald-400/90">
+                  GrindOS
+                </p>
+                {token && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearToken()
+                      navigate('/auth')
+                    }}
+                    className="rounded-md border border-slate-700 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-300"
+                  >
+                    Logout
+                  </button>
+                )}
+              </div>
               <p className="mt-1 hidden text-xs text-slate-500 lg:block">Productivity core</p>
             </div>
             <nav className="flex gap-1 rounded-xl border border-slate-800/80 bg-slate-900/40 p-1 lg:flex-col lg:border-0 lg:bg-transparent lg:p-0">
@@ -116,10 +135,22 @@ function Layout() {
   )
 }
 
+function RequireAuth({ children }) {
+  if (!getToken()) return <Navigate to="/auth" replace />
+  return children
+}
+
 export default function App() {
   return (
     <Routes>
-      <Route element={<Layout />}>
+      <Route path="auth" element={<AuthPage />} />
+      <Route
+        element={
+          <RequireAuth>
+            <Layout />
+          </RequireAuth>
+        }
+      >
         <Route index element={<TodayPage />} />
         <Route path="weekly" element={<WeeklyGoalsPage />} />
         <Route path="chat" element={<ChatPage />} />

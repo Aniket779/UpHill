@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatWeekRangeLabel, weekStartMondayLocal } from '../utils/date'
+import { apiFetch } from '../lib/api'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -89,7 +90,7 @@ export default function WeeklyGoalsPage() {
 
   const load = useCallback(async () => {
     setError(null)
-    const res = await fetch(`${apiBase}/goals`)
+    const res = await apiFetch(`${apiBase}/goals`)
     if (!res.ok) {
       setError('Could not load weekly goals.')
       setGoals([])
@@ -127,7 +128,7 @@ export default function WeeklyGoalsPage() {
     const trimmed = title.trim()
     if (!trimmed) return
     setError(null)
-    const res = await fetch(`${apiBase}/goals`, {
+    const res = await apiFetch(`${apiBase}/goals`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: trimmed, target }),
@@ -146,7 +147,7 @@ export default function WeeklyGoalsPage() {
     setSavingId(id)
     setError(null)
     try {
-      const res = await fetch(`${apiBase}/goals/${id}`, {
+      const res = await apiFetch(`${apiBase}/goals/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ progress: p }),

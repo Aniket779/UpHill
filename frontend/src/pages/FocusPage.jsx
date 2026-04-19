@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { apiFetch } from '../lib/api'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 const POMODORO_SECONDS = 25 * 60
@@ -20,7 +21,7 @@ export default function FocusPage() {
 
   const load = useCallback(async () => {
     setError(null)
-    const res = await fetch(`${apiBase}/tasks?date=today`)
+    const res = await apiFetch(`${apiBase}/tasks?date=today`)
     if (!res.ok) {
       setTasks([])
       setError('Could not load tasks for focus mode.')
@@ -66,7 +67,7 @@ export default function FocusPage() {
     setSaving(true)
     setError(null)
     try {
-      const res = await fetch(`${apiBase}/tasks/${currentTask._id}`, {
+      const res = await apiFetch(`${apiBase}/tasks/${currentTask._id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed: true }),

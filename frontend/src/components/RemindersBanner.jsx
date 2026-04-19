@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { apiFetch } from '../lib/api'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -20,7 +21,7 @@ export default function RemindersBanner({ topics = 'all', reloadKey = 0, page = 
   const load = useCallback(async () => {
     setFetchError(false)
     try {
-      const res = await fetch(`${apiBase}/insights/reminders`)
+      const res = await apiFetch(`${apiBase}/insights/reminders`)
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !Array.isArray(data.messages)) {
         setMessages([])

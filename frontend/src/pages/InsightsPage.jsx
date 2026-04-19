@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { apiFetch } from '../lib/api'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -26,7 +27,7 @@ export default function InsightsPage() {
     setWeeklyError(null)
     setWeeklyLoading(true)
     try {
-      const res = await fetch(`${apiBase}/ai/weekly-report`)
+      const res = await apiFetch(`${apiBase}/ai/weekly-report`)
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {
         setWeeklyError(json.detail || json.error || 'Could not load weekly report.')
@@ -47,7 +48,7 @@ export default function InsightsPage() {
     ;(async () => {
       setError(null)
       try {
-        const res = await fetch(`${apiBase}/insights`)
+        const res = await apiFetch(`${apiBase}/insights`)
         const json = await res.json().catch(() => ({}))
         if (!res.ok) {
           if (!cancelled) setError(json.error || 'Could not load insights.')
@@ -70,7 +71,7 @@ export default function InsightsPage() {
     ;(async () => {
       setAnalyticsError(null)
       try {
-        const res = await fetch(`${apiBase}/analytics/summary`)
+        const res = await apiFetch(`${apiBase}/analytics/summary`)
         const json = await res.json().catch(() => ({}))
         if (!cancelled) {
           if (!res.ok) {

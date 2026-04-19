@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatTodayHeading, todayLocalString } from '../utils/date'
 import RemindersBanner from '../components/RemindersBanner'
+import { apiFetch } from '../lib/api'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -57,7 +58,7 @@ export default function TodayPage() {
     setError(null)
     const qp = new URLSearchParams({ date: 'today' })
     if (filterCategory !== 'all') qp.set('category', filterCategory)
-    const res = await fetch(`${apiBase}/tasks?${qp.toString()}`)
+    const res = await apiFetch(`${apiBase}/tasks?${qp.toString()}`)
     if (!res.ok) {
       setError('Could not load today’s tasks.')
       setTasks([])
@@ -83,7 +84,7 @@ export default function TodayPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(`${apiBase}/goals`)
+        const res = await apiFetch(`${apiBase}/goals`)
         if (!res.ok) return
         const data = await res.json()
         if (!cancelled && Array.isArray(data)) setGoals(data)
@@ -101,7 +102,7 @@ export default function TodayPage() {
     const trimmed = title.trim()
     if (!trimmed) return
     setError(null)
-    const res = await fetch(`${apiBase}/tasks`, {
+    const res = await apiFetch(`${apiBase}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -134,7 +135,7 @@ export default function TodayPage() {
     setBreakdownLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${apiBase}/ai/breakdown`, {
+      const res = await apiFetch(`${apiBase}/ai/breakdown`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ goalText }),
@@ -146,7 +147,7 @@ export default function TodayPage() {
       }
       const results = await Promise.all(
         data.tasks.map((taskTitle) =>
-          fetch(`${apiBase}/tasks`, {
+          apiFetch(`${apiBase}/tasks`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -182,7 +183,7 @@ export default function TodayPage() {
     setPatchingId(id)
     setError(null)
     try {
-      const res = await fetch(`${apiBase}/tasks/${id}`, {
+      const res = await apiFetch(`${apiBase}/tasks/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed }),

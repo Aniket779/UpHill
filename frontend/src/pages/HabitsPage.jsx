@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { todayLocalString } from '../utils/date'
 import RemindersBanner from '../components/RemindersBanner'
+import { apiFetch } from '../lib/api'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -18,7 +19,7 @@ export default function HabitsPage() {
 
   const load = useCallback(async () => {
     setError(null)
-    const res = await fetch(`${apiBase}/habits`)
+    const res = await apiFetch(`${apiBase}/habits`)
     if (!res.ok) {
       setError('Could not load habits.')
       setHabits([])
@@ -45,7 +46,7 @@ export default function HabitsPage() {
     const trimmed = name.trim()
     if (!trimmed) return
     setError(null)
-    const res = await fetch(`${apiBase}/habits`, {
+    const res = await apiFetch(`${apiBase}/habits`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: trimmed }),
@@ -62,7 +63,7 @@ export default function HabitsPage() {
     setSavingId(id)
     setError(null)
     try {
-      const res = await fetch(`${apiBase}/habits/${id}/log`, {
+      const res = await apiFetch(`${apiBase}/habits/${id}/log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'done' }),

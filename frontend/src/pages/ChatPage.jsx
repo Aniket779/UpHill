@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { apiFetch } from '../lib/api'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 const SESSION_KEY = 'grindos_coach_chat_session_id'
@@ -22,7 +23,7 @@ export default function ChatPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(`${apiBase}/ai/chat?sessionId=${encodeURIComponent(sid)}`)
+        const res = await apiFetch(`${apiBase}/ai/chat?sessionId=${encodeURIComponent(sid)}`)
         const data = await res.json().catch(() => ({}))
         if (cancelled) return
         if (res.status === 404) {
@@ -54,7 +55,7 @@ export default function ChatPage() {
     setMessages([...prevSnap, { role: 'user', content: text }])
 
     try {
-      const res = await fetch(`${apiBase}/ai/chat`, {
+      const res = await apiFetch(`${apiBase}/ai/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

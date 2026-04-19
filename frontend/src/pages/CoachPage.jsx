@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { todayLocalString } from '../utils/date'
+import { apiFetch } from '../lib/api'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -12,7 +13,7 @@ function summarizeHabits(habits) {
 }
 
 async function fetchJson(url) {
-  const res = await fetch(url)
+  const res = await apiFetch(url)
   if (!res.ok) throw new Error(`Request failed: ${url}`)
   return res.json()
 }
@@ -37,7 +38,7 @@ export default function CoachPage() {
 
   const loadHistory = useCallback(async () => {
     try {
-      const res = await fetch(`${apiBase}/ai/feedback-history`)
+      const res = await apiFetch(`${apiBase}/ai/feedback-history`)
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !Array.isArray(data.items)) {
         setHistory([])
@@ -76,7 +77,7 @@ export default function CoachPage() {
       const userId =
         typeof localStorage !== 'undefined' ? localStorage.getItem('grindos_user_id') : null
 
-      const res = await fetch(`${apiBase}/ai/feedback`, {
+      const res = await apiFetch(`${apiBase}/ai/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
