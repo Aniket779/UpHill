@@ -9,6 +9,8 @@ const aiRoutes = require('./routes/ai');
 const insightsRouter = require('./routes/insights');
 const remindersRouter = require('./routes/reminders');
 const analyticsRouter = require('./routes/analytics');
+const authRouter = require('./routes/auth');
+const authMiddleware = require('./middleware/auth');
 
 dotenv.config();
 
@@ -29,6 +31,9 @@ mongoose
 app.get('/health', (_req, res) => {
   res.status(200).send('OK');
 });
+
+app.use('/auth', authRouter);
+app.use(authMiddleware);
 
 app.use('/habits', habitsRouter);
 app.use('/tasks', tasksRouter);
