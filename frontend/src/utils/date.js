@@ -6,12 +6,20 @@ export function todayLocalString() {
   return `${y}-${m}-${day}`
 }
 
-export function formatTodayHeading() {
+export function formatHeading(ymd) {
+  if (ymd === 'today' || !ymd || ymd === todayLocalString()) {
+    return new Intl.DateTimeFormat(undefined, {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    }).format(new Date())
+  }
   return new Intl.DateTimeFormat(undefined, {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
-  }).format(new Date())
+    year: 'numeric',
+  }).format(parseYmd(ymd))
 }
 
 function pad2(n) {
@@ -39,4 +47,20 @@ export function formatWeekRangeLabel(weekStartYmd) {
   const md = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
   const y = new Intl.DateTimeFormat(undefined, { year: 'numeric' })
   return `${md.format(start)} — ${md.format(end)}, ${y.format(end)}`
+}
+
+export function addDays(ymd, amount) {
+  const d = ymd === 'today' ? new Date() : parseYmd(ymd)
+  d.setDate(d.getDate() + amount)
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+export function getShortWeekday(ymd) {
+  const d = ymd === 'today' ? new Date() : parseYmd(ymd)
+  return new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(d)
+}
+
+export function getNumericDay(ymd) {
+  const d = ymd === 'today' ? new Date() : parseYmd(ymd)
+  return new Intl.DateTimeFormat(undefined, { day: 'numeric' }).format(d)
 }

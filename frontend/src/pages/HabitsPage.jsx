@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { todayLocalString } from '../utils/date'
-import RemindersBanner from '../components/RemindersBanner'
 import { apiFetch } from '../lib/api'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
@@ -8,6 +7,51 @@ const apiBase = import.meta.env.VITE_API_URL ?? ''
 function todayLog(habit) {
   const t = todayLocalString()
   return habit.logs?.find((l) => l.date === t)
+}
+
+function HabitActivityGrid({ logs }) {
+  const days = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const dayOfWeek = today.getDay()
+    const startDate = new Date(today)
+    startDate.setDate(today.getDate() - dayOfWeek - (12 * 7))
+    
+    const arr = []
+    for (let i = 0; i < 91; i++) {
+      const d = new Date(startDate)
+      d.setDate(startDate.getDate() + i)
+      const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      
+      const isFuture = d > today
+      const log = logs?.find(l => l.date === ymd)
+      const isDone = log?.status === 'done'
+      
+      arr.push({ ymd, isFuture, isDone })
+    }
+    return arr
+  }, [logs])
+
+  return (
+    <div className="mt-2 flex overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="grid grid-rows-7 grid-flow-col gap-[3px]">
+        {days.map((day) => (
+          <div
+            key={day.ymd}
+            title={day.isFuture ? '' : `${day.ymd}: ${day.isDone ? 'Done' : 'Missed'}`}
+            className={`h-2.5 w-2.5 rounded-[2px] transition-colors ${
+              day.isFuture 
+                ? 'bg-transparent' 
+                : day.isDone 
+                  ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.3)]' 
+                  : 'bg-slate-800/80 hover:bg-slate-700'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function HabitsPage() {
@@ -79,20 +123,9 @@ export default function HabitsPage() {
     }
   }
 
-  const remindersReloadKey = useMemo(
-    () =>
-      habits
-        .map((h) => {
-          const log = todayLog(h)
-          return `${h._id}:${log?.status ?? 'none'}`
-        })
-        .join('|'),
-    [habits]
-  )
-
   return (
-    <div className="px-4 py-8 sm:px-6 lg:px-10">
-      <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-4xl">
+      <div className="rounded-3xl border border-white/5 bg-white/[0.02] shadow-2xl backdrop-blur-3xl p-6 lg:p-10 mb-8">
         <header className="mb-10">
           <h1 className="text-3xl font-semibold tracking-tight text-white">Habits</h1>
           <p className="mt-2 max-w-lg text-sm leading-relaxed text-slate-400">
@@ -100,22 +133,20 @@ export default function HabitsPage() {
           </p>
         </header>
 
-        <RemindersBanner topics={['habits']} reloadKey={remindersReloadKey} page="habits" />
-
         <form
           onSubmit={addHabit}
-          className="mb-8 flex flex-col gap-3 rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-xl shadow-black/25 backdrop-blur-sm sm:flex-row sm:items-center"
+          className="mb-8 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 shadow-xl shadow-black/40 backdrop-blur-md sm:flex-row sm:items-center"
         >
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="New habit name"
-            className="min-w-0 flex-1 rounded-xl border border-slate-700/80 bg-slate-950/80 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
           />
           <button
             type="submit"
-            className="shrink-0 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 active:bg-emerald-700"
+            className="shrink-0 rounded-xl bg-emerald-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400 active:bg-emerald-600 shadow-[0_0_15px_rgba(16,185,129,0.4)]"
           >
             Add habit
           </button>
@@ -144,37 +175,40 @@ export default function HabitsPage() {
               return (
                 <li
                   key={h._id}
-                  className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800/80 bg-slate-900/40 px-5 py-4 backdrop-blur-sm"
+                  className="flex flex-col gap-2 rounded-2xl border border-white/5 bg-white/[0.01] px-5 py-4 backdrop-blur-sm hover:bg-white/[0.02] transition"
                 >
-                  <div className="min-w-0">
-                    <p className="flex flex-wrap items-center gap-2 truncate font-medium text-white">
-                      <span className="truncate">{h.name}</span>
-                      <span
-                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-orange-500/30 bg-orange-950/40 px-2 py-0.5 text-xs font-semibold tabular-nums text-orange-100"
-                        title="Current streak (consecutive done days)"
-                      >
-                        <span aria-hidden>🔥</span>
-                        {h.streak ?? 0}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {doneToday ? (
-                        <span className="text-emerald-400/90">Done today</span>
-                      ) : log?.status === 'missed' ? (
-                        <span className="text-amber-400/90">Missed today</span>
-                      ) : (
-                        'Not logged today'
-                      )}
-                    </p>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="flex flex-wrap items-center gap-2 truncate font-medium text-white">
+                        <span className="truncate">{h.name}</span>
+                        <span
+                          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-orange-500/30 bg-orange-950/40 px-2 py-0.5 text-xs font-semibold tabular-nums text-orange-100"
+                          title="Current streak (consecutive done days)"
+                        >
+                          <span aria-hidden>🔥</span>
+                          {h.streak ?? 0}
+                        </span>
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {doneToday ? (
+                          <span className="text-emerald-400/90">Done today</span>
+                        ) : log?.status === 'missed' ? (
+                          <span className="text-amber-400/90">Missed today</span>
+                        ) : (
+                          'Not logged today'
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={doneToday || savingId === h._id}
+                      onClick={() => markDone(h._id)}
+                      className="shrink-0 rounded-xl border border-emerald-700/40 bg-emerald-950/40 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {savingId === h._id ? '…' : doneToday ? 'Done' : 'Mark done'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    disabled={doneToday || savingId === h._id}
-                    onClick={() => markDone(h._id)}
-                    className="shrink-0 rounded-xl border border-emerald-700/40 bg-emerald-950/40 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {savingId === h._id ? '…' : doneToday ? 'Done' : 'Mark done'}
-                  </button>
+                  <HabitActivityGrid logs={h.logs} />
                 </li>
               )
             })}
