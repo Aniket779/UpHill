@@ -55,6 +55,8 @@ router.post('/', async (req, res) => {
     typeof req.body?.goalId === 'string' && mongoose.Types.ObjectId.isValid(req.body.goalId)
       ? req.body.goalId
       : null;
+  const startTime = typeof req.body?.startTime === 'string' && /^\d{2}:\d{2}$/.test(req.body.startTime) ? req.body.startTime : null;
+  const duration = typeof req.body?.duration === 'number' && req.body.duration > 0 ? req.body.duration : null;
   const dateParam = resolveDateParam(req.body?.date);
   if (!dateParam.ok) {
     return res.status(400).json({ error: dateParam.error });
@@ -66,11 +68,20 @@ router.post('/', async (req, res) => {
     completed: false,
     priority,
     date,
+    startTime,
+    duration,
+    status: 'todo',
     category,
     tags,
     goalId,
   });
   return res.status(201).json(task);
+});
+
+router.get('/board', async (req, res) => {
+  // Fetch all tasks for the Kanban board
+  const tasks = await Task.find({}).lean();
+  return res.json(tasks);
 });
 
 router.get('/', async (req, res) => {
@@ -97,7 +108,16 @@ router.patch('/:id', async (req, res) => {
     return res.status(400).json({ error: 'invalid task id' });
   }
   const patch = {};
-  if (typeof req.body?.completed === 'boolean') patch.completed = req.body.completed;
+  if (typeof req.body?.completed === 'boolean') {
+    patch.completed = req.body.completed;
+    patch.status = req.body.completed ? 'done' : 'todo';
+  }
+  
+  if (typeof req.body?.status === 'string' && ['todo', 'in-progress', 'done'].includes(req.body.status)) {
+    patch.status = req.body.status;
+    patch.completed = req.body.status === 'done';
+  }
+
   if (typeof req.body?.category === 'string') {
     patch.category = req.body.category.trim().toLowerCase() || 'general';
   }
@@ -108,6 +128,13 @@ router.patch('/:id', async (req, res) => {
     patch.goalId = req.body.goalId;
   }
   if (req.body?.goalId === null) patch.goalId = null;
+
+  if (typeof req.body?.startTime === 'string' && /^\d{2}:\d{2}$/.test(req.body.startTime)) patch.startTime = req.body.startTime;
+  if (req.body?.startTime === null) patch.startTime = null;
+  
+  if (typeof req.body?.duration === 'number' && req.body.duration > 0) patch.duration = req.body.duration;
+  if (req.body?.duration === null) patch.duration = null;
+
   if (Object.keys(patch).length === 0) {
     return res.status(400).json({ error: 'no valid fields to update' });
   }

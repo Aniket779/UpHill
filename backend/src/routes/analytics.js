@@ -7,10 +7,15 @@ const router = express.Router();
 function ymdOffset(daysBack) {
   const d = new Date();
   d.setDate(d.getDate() - daysBack);
+  // Use local time components so the date matches how tasks store their `date` field
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+function todayLocal() {
+  return ymdOffset(0);
 }
 
 router.get('/summary', async (_req, res) => {
@@ -62,6 +67,61 @@ router.get('/summary', async (_req, res) => {
   } catch (err) {
     console.error('GET /analytics/summary error:', err);
     return res.status(500).json({ error: 'Failed to load analytics summary.' });
+  }
+});
+
+router.get('/contributions', async (_req, res) => {
+  try {
+    const [tasks, habits] = await Promise.all([Task.find().lean(), Habit.find().lean()]);
+    const activityMap = {};
+
+    for (const t of tasks) {
+      if (t.completed && t.date) {
+        activityMap[t.date] = (activityMap[t.date] || 0) + 1;
+      }
+    }
+
+    for (const h of habits) {
+      for (const log of h.logs || []) {
+        if (log.status === 'done' && log.date) {
+          activityMap[log.date] = (activityMap[log.date] || 0) + 1;
+        }
+      }
+    }
+
+    const totalActivity = Object.values(activityMap).reduce((sum, count) => sum + count, 0);
+
+    let currentStreak = 0;
+    let longestStreak = 0;
+    const contributions = [];
+    let tempStreak = 0;
+    
+    // Build array for the last 365 days
+    for (let i = 364; i >= 0; i -= 1) {
+      const day = ymdOffset(i);
+      const count = activityMap[day] || 0;
+      contributions.push({ date: day, count });
+      
+      if (count > 0) {
+        tempStreak += 1;
+        longestStreak = Math.max(longestStreak, tempStreak);
+      } else {
+        tempStreak = 0;
+      }
+    }
+    
+    // Current streak is tempStreak because the loop ends on today (i=0)
+    currentStreak = tempStreak;
+
+    return res.json({
+      contributions,
+      totalActivity,
+      currentStreak,
+      longestStreak
+    });
+  } catch (err) {
+    console.error('GET /analytics/contributions error:', err);
+    return res.status(500).json({ error: 'Failed to load contributions.' });
   }
 });
 
