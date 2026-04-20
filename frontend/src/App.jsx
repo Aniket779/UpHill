@@ -12,7 +12,7 @@ import FocusPage from './pages/FocusPage'
 import AuthPage from './pages/AuthPage'
 import { clearToken, getToken } from './lib/auth'
 import { disconnectSocket } from './lib/socket'
-import RemindersPopover from './components/RemindersPopover'
+import NotificationsPopover from './components/NotificationsPopover'
 import CommandPalette from './components/CommandPalette'
 
 function Layout() {
@@ -145,7 +145,7 @@ function Layout() {
               </div>
             </div>
 
-            <RemindersPopover />
+            <NotificationsPopover />
           </div>
         </header>
 
