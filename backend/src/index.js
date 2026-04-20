@@ -68,6 +68,7 @@ app.use('/insights', insightsRouter);
 app.use('/reminders', remindersRouter);
 app.use('/analytics', analyticsRouter);
 app.use('/ai', aiRoutes);
+app.use('/notifications', require('./routes/notifications'));
 
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
