@@ -12,10 +12,133 @@ import { apiFetch } from '../lib/api'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
+// ── Prediction Card ──────────────────────────────────────────────────────────
+
+const RISK_STYLES = {
+  high: {
+    border: 'border-rose-500/40',
+    bg: 'bg-gradient-to-r from-rose-950/60 via-rose-950/30 to-slate-900/40',
+    dot: 'bg-rose-500',
+    badge: 'border-rose-500/40 bg-rose-500/15 text-rose-300',
+    label: 'High Risk',
+    glow: 'shadow-rose-900/30',
+  },
+  medium: {
+    border: 'border-amber-500/40',
+    bg: 'bg-gradient-to-r from-amber-950/50 via-amber-950/20 to-slate-900/40',
+    dot: 'bg-amber-400',
+    badge: 'border-amber-500/40 bg-amber-500/15 text-amber-300',
+    label: 'Medium Risk',
+    glow: 'shadow-amber-900/30',
+  },
+  low: {
+    border: 'border-emerald-500/35',
+    bg: 'bg-gradient-to-r from-emerald-950/40 via-emerald-950/15 to-slate-900/40',
+    dot: 'bg-emerald-400',
+    badge: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300',
+    label: 'On Track',
+    glow: 'shadow-emerald-900/20',
+  },
+}
+
+function PredictionCard({ data, loading }) {
+  if (loading) {
+    return (
+      <div className="mb-10 rounded-2xl border border-white/5 bg-slate-900/40 p-5 animate-pulse">
+        <div className="h-4 w-48 rounded bg-slate-800" />
+        <div className="mt-3 h-3 w-72 rounded bg-slate-800" />
+      </div>
+    )
+  }
+  if (!data) return null
+
+  const s = RISK_STYLES[data.riskLevel] ?? RISK_STYLES.medium
+  const { meta } = data
+
+  return (
+    <div className={`mb-10 rounded-2xl border ${s.border} ${s.bg} p-5 shadow-xl ${s.glow} backdrop-blur-sm`}>
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="relative flex h-3 w-3 shrink-0 mt-0.5">
+            <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${s.dot} opacity-60`} />
+            <span className={`relative inline-flex h-3 w-3 rounded-full ${s.dot}`} />
+          </span>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Prediction</p>
+            <h3 className="mt-0.5 text-sm font-semibold text-white leading-snug">{data.prediction}</h3>
+          </div>
+        </div>
+        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${s.badge}`}>
+          {s.label}
+        </span>
+      </div>
+
+      {/* Reason */}
+      <p className="mt-3 text-xs text-slate-400 leading-relaxed pl-6">{data.reason}</p>
+
+      {/* Active signal tags */}
+      {meta?.activeSignals?.length > 0 && (
+        <div className="mt-4 pl-6 flex flex-wrap gap-1.5">
+          {meta.activeSignals.map((sig, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center rounded-lg border border-white/5 bg-slate-900/60 px-2.5 py-1 text-[10px] text-slate-400 leading-none"
+            >
+              {sig}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Mini stats footer */}
+      {meta && (
+        <div className="mt-4 pl-6 flex flex-wrap gap-6 border-t border-white/5 pt-3">
+          {meta.taskCompletionRate3d !== null && (
+            <div>
+              <p className="text-[9px] uppercase tracking-wider text-slate-600">3d tasks</p>
+              <p className={`text-sm font-bold tabular-nums ${
+                meta.taskCompletionRate3d < 50 ? 'text-rose-400'
+                : meta.taskCompletionRate3d < 70 ? 'text-amber-400' : 'text-emerald-400'
+              }`}>{meta.taskCompletionRate3d}%</p>
+            </div>
+          )}
+          {meta.taskCompletionRate7d !== null && (
+            <div>
+              <p className="text-[9px] uppercase tracking-wider text-slate-600">7d tasks</p>
+              <p className={`text-sm font-bold tabular-nums ${
+                meta.taskCompletionRate7d < 50 ? 'text-rose-400'
+                : meta.taskCompletionRate7d < 70 ? 'text-amber-400' : 'text-emerald-400'
+              }`}>{meta.taskCompletionRate7d}%</p>
+            </div>
+          )}
+          {meta.habitConsistencyLateWeek !== null && (
+            <div>
+              <p className="text-[9px] uppercase tracking-wider text-slate-600">Habit rate</p>
+              <p className={`text-sm font-bold tabular-nums ${
+                meta.habitConsistencyLateWeek < 50 ? 'text-rose-400'
+                : meta.habitConsistencyLateWeek < 70 ? 'text-amber-400' : 'text-emerald-400'
+              }`}>{meta.habitConsistencyLateWeek}%</p>
+            </div>
+          )}
+          {meta.riskScore !== undefined && (
+            <div className="ml-auto">
+              <p className="text-[9px] uppercase tracking-wider text-slate-600">Risk score</p>
+              <p className="text-sm font-bold tabular-nums text-slate-300">{meta.riskScore}/100</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function InsightsPage() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [prediction, setPrediction] = useState(null)
+  const [predictionLoading, setPredictionLoading] = useState(true)
 
   const [weekly, setWeekly] = useState(null)
   const [weeklyLoading, setWeeklyLoading] = useState(false)
@@ -61,9 +184,24 @@ export default function InsightsPage() {
         if (!cancelled) setLoading(false)
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await apiFetch(`${apiBase}/insights/predictions`)
+        if (!res.ok || cancelled) return
+        const json = await res.json().catch(() => null)
+        if (!cancelled) setPrediction(json)
+      } catch {
+        // non-critical
+      } finally {
+        if (!cancelled) setPredictionLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -118,6 +256,9 @@ export default function InsightsPage() {
             .
           </p>
         </header>
+
+        {/* Prediction Card */}
+        <PredictionCard data={prediction} loading={predictionLoading} />
 
         <section className="mb-10 rounded-2xl border border-violet-900/35 bg-gradient-to-br from-violet-950/40 via-slate-900/50 to-slate-950/80 p-6 shadow-xl shadow-black/25">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -6,6 +6,8 @@ import { useSocket } from '../hooks/useSocket'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
+
+
 const PRIORITIES = [
   { id: 'low', label: 'Low' },
   { id: 'medium', label: 'Medium' },
@@ -141,10 +143,10 @@ export default function TodayPage() {
         if (!cancelled) setGoals([])
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [])
+
+
 
   async function addTask(e) {
     e.preventDefault()
