@@ -95,6 +95,11 @@ router.post('/:id/log', async (req, res) => {
   }
 
   await habit.save();
+
+  // Emit real-time event to all connected clients
+  const io = req.app.locals.io;
+  if (io) io.emit('habit:updated', habit);
+
   return res.json(habit);
 });
 

@@ -75,6 +75,11 @@ router.post('/', async (req, res) => {
     tags,
     goalId,
   });
+
+  // Emit real-time event to all connected clients
+  const io = req.app.locals.io;
+  if (io) io.emit('task:created', task);
+
   return res.status(201).json(task);
 });
 
@@ -142,6 +147,11 @@ router.patch('/:id', async (req, res) => {
   if (!task) {
     return res.status(404).json({ error: 'task not found' });
   }
+
+  // Emit real-time event to all connected clients
+  const io = req.app.locals.io;
+  if (io) io.emit('task:updated', task);
+
   return res.json(task);
 });
 
