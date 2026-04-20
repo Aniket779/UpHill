@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { formatHeading, todayLocalString, addDays, getShortWeekday, getNumericDay } from '../utils/date'
 import { apiFetch } from '../lib/api'
+import { useSocket } from '../hooks/useSocket'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -96,6 +97,37 @@ export default function TodayPage() {
       window.removeEventListener('task-added', handleTaskAdded)
     }
   }, [load])
+
+  // ── Real-time socket listeners ─────────────────────────────────────────────
+  useSocket('task:created', (newTask) => {
+    // Only add to this view if the task belongs to the currently displayed date
+    if (newTask.date !== activeDate) return
+    setTasks((prev) => {
+      // Guard against duplicates (own tab already has it via the REST response)
+      if (prev.some((t) => t._id === newTask._id)) return prev
+      const next = [newTask, ...prev]
+      const rank = { high: 0, medium: 1, low: 2 }
+      next.sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1
+        return rank[a.priority] - rank[b.priority]
+      })
+      return next
+    })
+  })
+
+  useSocket('task:updated', (updatedTask) => {
+    setTasks((prev) => {
+      if (!prev.some((t) => t._id === updatedTask._id)) return prev
+      const next = prev.map((t) => (t._id === updatedTask._id ? updatedTask : t))
+      const rank = { high: 0, medium: 1, low: 2 }
+      next.sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1
+        return rank[a.priority] - rank[b.priority]
+      })
+      return next
+    })
+  })
+  // ──────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { todayLocalString } from '../utils/date'
 import { apiFetch } from '../lib/api'
+import { useSocket } from '../hooks/useSocket'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -84,6 +85,15 @@ export default function HabitsPage() {
       cancelled = true
     }
   }, [load])
+
+  // ── Real-time socket listener ──────────────────────────────────────────────
+  useSocket('habit:updated', (updatedHabit) => {
+    setHabits((prev) => {
+      if (!prev.some((h) => h._id === String(updatedHabit._id))) return prev
+      return prev.map((h) => (h._id === String(updatedHabit._id) ? updatedHabit : h))
+    })
+  })
+  // ──────────────────────────────────────────────────────────────────────────
 
   async function addHabit(e) {
     e.preventDefault()

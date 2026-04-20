@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiFetch } from '../lib/api'
+import { useSocket } from '../hooks/useSocket'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -73,6 +74,22 @@ export default function KanbanPage() {
       await load()
     }
   }
+
+  // ── Real-time socket listeners ─────────────────────────────────────────────
+  useSocket('task:created', (newTask) => {
+    setTasks((prev) => {
+      if (prev.some((t) => t._id === newTask._id)) return prev
+      return [...prev, newTask]
+    })
+  })
+
+  useSocket('task:updated', (updatedTask) => {
+    setTasks((prev) => {
+      if (!prev.some((t) => t._id === updatedTask._id)) return prev
+      return prev.map((t) => (t._id === updatedTask._id ? updatedTask : t))
+    })
+  })
+  // ──────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="mx-auto max-w-7xl h-[calc(100vh-6rem)] flex flex-col">

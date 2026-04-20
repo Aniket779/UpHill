@@ -11,6 +11,7 @@ import InsightsPage from './pages/InsightsPage'
 import FocusPage from './pages/FocusPage'
 import AuthPage from './pages/AuthPage'
 import { clearToken, getToken } from './lib/auth'
+import { disconnectSocket } from './lib/socket'
 import RemindersPopover from './components/RemindersPopover'
 import CommandPalette from './components/CommandPalette'
 
@@ -109,7 +110,8 @@ function Layout() {
               <button 
                 onClick={(e) => { 
                   e.stopPropagation(); 
-                  clearToken(); 
+                  clearToken();
+                  disconnectSocket();
                   navigate('/auth'); 
                 }} 
                 className="text-xs text-slate-500 hover:text-rose-400 transition" 
