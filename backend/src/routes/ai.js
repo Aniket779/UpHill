@@ -64,6 +64,143 @@ function sanitizeHistoryForChat(messages) {
   return slice;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function last7DayStrings() {
+  const days = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    days.push(`${y}-${m}-${day}`);
+  }
+  return days;
+}
+
+/**
+ * Build a rich, structured data summary for the last 7 days to feed into the prompt.
+ */
+async function buildFeedbackContext(days) {
+  const Goal = require('../models/Goal');
+  const [tasks, habits, goals] = await Promise.all([
+    Task.find({ date: { $in: days } }).lean(),
+    Habit.find().lean(),
+    Goal.find().lean(),
+  ]);
+
+  // ── Task stats ──────────────────────────────────────────────────────────────
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter((t) => t.completed).length;
+  const completionRate = totalTasks
+    ? Math.round((completedTasks / totalTasks) * 100)
+    : 0;
+
+  // Per-day breakdown
+  const perDay = {};
+  for (const d of days) perDay[d] = { total: 0, completed: 0 };
+  for (const t of tasks) {
+    if (perDay[t.date]) {
+      perDay[t.date].total += 1;
+      if (t.completed) perDay[t.date].completed += 1;
+    }
+  }
+  const dailyTaskStats = Object.entries(perDay).map(([date, s]) => ({
+    date,
+    total: s.total,
+    completed: s.completed,
+    rate: s.total ? Math.round((s.completed / s.total) * 100) : null,
+  }));
+
+  // Missed high-priority tasks (a strong signal for the coach)
+  const missedHighPriority = tasks
+    .filter((t) => !t.completed && t.priority === 'high')
+    .map((t) => ({ date: t.date, title: t.title, category: t.category }));
+
+  // Category breakdown
+  const categoryMap = {};
+  for (const t of tasks) {
+    const cat = t.category || 'general';
+    if (!categoryMap[cat]) categoryMap[cat] = { total: 0, completed: 0 };
+    categoryMap[cat].total += 1;
+    if (t.completed) categoryMap[cat].completed += 1;
+  }
+  const categoryStats = Object.entries(categoryMap).map(([cat, s]) => ({
+    category: cat,
+    total: s.total,
+    completed: s.completed,
+    rate: Math.round((s.completed / s.total) * 100),
+  }));
+
+  // ── Habit stats ─────────────────────────────────────────────────────────────
+  const habitSummaries = habits.map((h) => {
+    const logsInWindow = (h.logs || []).filter((l) => days.includes(l.date));
+    const doneCount = logsInWindow.filter((l) => l.status === 'done').length;
+    const missedCount = logsInWindow.filter((l) => l.status === 'missed').length;
+    const loggedCount = logsInWindow.length;
+
+    // Detect consecutive misses (last N days without a 'done')
+    let consecutiveMisses = 0;
+    for (let i = days.length - 1; i >= 0; i--) {
+      const log = logsInWindow.find((l) => l.date === days[i]);
+      if (log?.status === 'done') break;
+      consecutiveMisses += 1;
+    }
+
+    return {
+      name: h.name,
+      currentStreak: h.streak ?? 0,
+      doneInLast7: doneCount,
+      missedInLast7: missedCount,
+      notLoggedInLast7: 7 - loggedCount,
+      consecutiveMissesFromToday: consecutiveMisses,
+      completionRateLast7: loggedCount
+        ? Math.round((doneCount / loggedCount) * 100)
+        : null,
+    };
+  });
+
+  // Classify habits by trend
+  const habitsThriving = habitSummaries.filter((h) => h.currentStreak >= 3);
+  const habitsAtRisk = habitSummaries.filter(
+    (h) => h.consecutiveMissesFromToday >= 2 && h.currentStreak < 3
+  );
+
+  // ── Goal stats ───────────────────────────────────────────────────────────────
+  const goalSummaries = goals.map((g) => ({
+    title: g.title,
+    progress: g.progress ?? 0,
+    target: g.target ?? 100,
+    completionPercent: g.target ? Math.round(((g.progress ?? 0) / g.target) * 100) : 0,
+    weekStartDate: g.weekStartDate,
+  }));
+
+  return {
+    windowDays: days,
+    tasks: {
+      totalInWindow: totalTasks,
+      completedInWindow: completedTasks,
+      overallCompletionRate: completionRate,
+      dailyBreakdown: dailyTaskStats,
+      missedHighPriorityTasks: missedHighPriority,
+      categoryBreakdown: categoryStats,
+    },
+    habits: {
+      total: habits.length,
+      summaries: habitSummaries,
+      habitsThriving: habitsThriving.map((h) => h.name),
+      habitsAtRisk: habitsAtRisk.map((h) => h.name),
+    },
+    goals: {
+      total: goals.length,
+      summaries: goalSummaries,
+    },
+  };
+}
+
+// ─── POST /feedback ───────────────────────────────────────────────────────────
+
 router.post('/feedback', async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || !String(apiKey).trim()) {
@@ -72,51 +209,95 @@ router.post('/feedback', async (req, res) => {
     });
   }
 
-  const body = req.body ?? {};
-  const habits = normalizeHabits(body.habits);
-  const tasksCompleted = asNonNegativeCount(body.tasksCompleted);
-  const missedTasks = asNonNegativeCount(body.missedTasks);
-
-  const coachInstruction =
-    'You are a strict but motivating coach. Analyze the user data and give short actionable feedback.';
-
-  const dataBlock = JSON.stringify(
-    {
-      habits,
-      tasksCompleted,
-      missedTasks,
-    },
-    null,
-    2
-  );
-
-  const prompt = `${coachInstruction}\n\nUser data (JSON):\n${dataBlock}`;
-
   try {
+    const days = last7DayStrings();
+    const context = await buildFeedbackContext(days);
+
+    const prompt = `You are a strict but intelligent productivity coach. Your job is to analyze real behavioral data, detect patterns, and deliver sharp, personalized feedback — not generic advice.
+
+Here is the user's productivity data for the last 7 days:
+
+${JSON.stringify(context, null, 2)}
+
+Analyze this data carefully. Look for:
+- Days or categories where task completion drops
+- Habits that are declining (consecutive misses, low streak)
+- High-priority tasks being skipped repeatedly
+- Goals with low progress
+- Positive momentum worth reinforcing
+
+Respond with ONLY valid JSON (no markdown, no code fences) in exactly this shape:
+{
+  "pattern": "A 2-3 sentence description of the most significant pattern you detect in this data. Be specific — reference actual numbers, habit names, or dates.",
+  "actionPlan": ["Step 1: specific, measurable action", "Step 2: specific, measurable action", "Step 3: specific, measurable action"],
+  "insight": "One sharp behavioral insight about WHY this pattern is happening, grounded in the data. Avoid vague psychology — be direct."
+}
+
+Rules:
+- Reference actual data points (e.g. habit names, completion percentages, specific days).
+- No soft motivational filler.
+- actionPlan must have exactly 3 items, each starting with a verb.
+- insight must be one sentence, incisive and data-driven.`;
+
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: MODEL_ID });
     const result = await model.generateContent(prompt);
-    const response = result.response;
-    const feedback = typeof response.text === 'function' ? response.text().trim() : '';
+    const raw = typeof result.response?.text === 'function' ? result.response.text().trim() : '';
 
-    if (!feedback) {
+    if (!raw) {
       return res.status(502).json({ error: 'The model returned an empty message.' });
     }
 
+    // Parse structured JSON, stripping any accidental code fences
+    let parsed;
+    try {
+      let clean = raw;
+      const fence = clean.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (fence) clean = fence[1].trim();
+      parsed = JSON.parse(clean);
+      if (
+        typeof parsed.pattern !== 'string' ||
+        !Array.isArray(parsed.actionPlan) ||
+        typeof parsed.insight !== 'string'
+      ) {
+        throw new Error('Missing required fields in model response');
+      }
+    } catch (parseErr) {
+      console.error('feedback JSON parse error:', parseErr, raw.slice(0, 600));
+      return res.status(502).json({
+        error: 'Could not parse structured feedback from model.',
+        detail: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      });
+    }
+
+    // Also persist as plain text for history
+    const feedbackText = [
+      `Pattern Detected: ${parsed.pattern}`,
+      `Action Plan:\n${parsed.actionPlan.map((s, i) => `${i + 1}. ${s}`).join('\n')}`,
+      `Coach Insight: ${parsed.insight}`,
+    ].join('\n\n');
+
     let userId = 'anonymous';
-    const rawUid = body.userId;
+    const rawUid = req.body?.userId;
     if (typeof rawUid === 'string' && rawUid.trim()) {
       const u = rawUid.trim();
       userId = mongoose.Types.ObjectId.isValid(u) ? new mongoose.Types.ObjectId(u) : u;
     }
 
-    const saved = await Feedback.create({ userId, text: feedback });
+    const saved = await Feedback.create({ userId, text: feedbackText });
     const savedDoc = saved.toObject();
     if (savedDoc._id) savedDoc._id = String(savedDoc._id);
 
     return res.json({
-      feedback,
+      feedback: parsed,
+      feedbackText,
       saved: savedDoc,
+      context: {
+        windowDays: context.windowDays,
+        taskCompletionRate: context.tasks.overallCompletionRate,
+        habitsAtRisk: context.habits.habitsAtRisk,
+        habitsThriving: context.habits.habitsThriving,
+      },
     });
   } catch (err) {
     console.error('AI feedback error:', err);
@@ -126,6 +307,7 @@ router.post('/feedback', async (req, res) => {
     });
   }
 });
+
 
 router.get('/feedback-history', async (_req, res) => {
   try {
