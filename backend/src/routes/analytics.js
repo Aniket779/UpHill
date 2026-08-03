@@ -1,22 +1,9 @@
 const express = require('express');
 const Task = require('../models/Task');
 const Habit = require('../models/Habit');
+const { ymdOffset } = require('../lib/dates');
 
 const router = express.Router();
-
-function ymdOffset(daysBack) {
-  const d = new Date();
-  d.setDate(d.getDate() - daysBack);
-  // Use local time components so the date matches how tasks store their `date` field
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function todayLocal() {
-  return ymdOffset(0);
-}
 
 router.get('/summary', async (req, res) => {
   try {

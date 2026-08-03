@@ -1,43 +1,12 @@
 const express = require('express');
 const Habit = require('../models/Habit');
 const Task = require('../models/Task');
+const { todayLocalString, addDaysYmd, ymdOffset, parseYmdLocal, lastNDayStrings } = require('../lib/dates');
+const { countDoneCalendarStreakFrom } = require('../lib/habitLogs');
 
 const router = express.Router();
 
-function addDaysYmd(ymd, deltaDays) {
-  const [y, mo, da] = ymd.split('-').map(Number);
-  const dt = new Date(y, mo - 1, da);
-  dt.setDate(dt.getDate() + deltaDays);
-  const yy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  const dd = String(dt.getDate()).padStart(2, '0');
-  return `${yy}-${mm}-${dd}`;
-}
-
-function countDoneCalendarStreakFrom(logs, endYmd) {
-  const map = new Map((logs || []).map((l) => [l.date, l.status]));
-  let count = 0;
-  let cur = endYmd;
-  for (;;) {
-    if (map.get(cur) === 'done') {
-      count += 1;
-      cur = addDaysYmd(cur, -1);
-    } else {
-      break;
-    }
-  }
-  return count;
-}
-
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-function todayLocalString() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 function parseWindowDays(raw) {
   const n = Number(raw);
@@ -47,11 +16,6 @@ function parseWindowDays(raw) {
 
 function filterLogsByWindow(logs, cutoffDate) {
   return (logs || []).filter((l) => l.date >= cutoffDate);
-}
-
-function parseYmdLocal(ymd) {
-  const [y, m, d] = ymd.split('-').map(Number);
-  return new Date(y, m - 1, d);
 }
 
 function countStreakBreaks(sortedLogs) {
@@ -144,14 +108,7 @@ router.get('/', async (req, res) => {
   try {
     const windowDays = parseWindowDays(req.query.windowDays);
     const today = todayLocalString();
-    const cutoffDate = (() => {
-      const d = new Date();
-      d.setDate(d.getDate() - windowDays);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    })();
+    const cutoffDate = ymdOffset(windowDays);
 
     const habits = await Habit.find({ userId: req.user.sub }).lean();
 
@@ -315,14 +272,8 @@ router.get('/predictions', async (req, res) => {
     const today = todayLocalString();
 
     // Build last-7 and last-3 day arrays
-    const days7 = [];
-    const days3 = [];
-    for (let i = 6; i >= 0; i--) {
-      days7.push(addDaysYmd(today, -i));
-    }
-    for (let i = 2; i >= 0; i--) {
-      days3.push(addDaysYmd(today, -i));
-    }
+    const days7 = lastNDayStrings(7);
+    const days3 = lastNDayStrings(3);
 
     const [tasks, habits] = await Promise.all([
       Task.find({ userId: req.user.sub, date: { $in: days7 } }).lean(),

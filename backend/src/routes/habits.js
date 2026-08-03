@@ -1,26 +1,10 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Habit = require('../models/Habit');
+const { todayLocalString, addDaysYmd, parseYmdLocal } = require('../lib/dates');
+const { applyXpDelta, HABIT_XP } = require('../lib/xp');
 
 const router = express.Router();
-
-function todayLocalString() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function prevDayYmd(ymd) {
-  const [y, mo, da] = ymd.split('-').map(Number);
-  const dt = new Date(y, mo - 1, da);
-  dt.setDate(dt.getDate() - 1);
-  const yy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  const dd = String(dt.getDate()).padStart(2, '0');
-  return `${yy}-${mm}-${dd}`;
-}
 
 router.post('/', async (req, res) => {
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
@@ -83,12 +67,11 @@ router.post('/:id/log', async (req, res) => {
   }
 
   if (status === 'done' && priorStatus !== 'done') {
-    const yStr = prevDayYmd(date);
+    const yStr = addDaysYmd(date, -1);
     const yEntry = habit.logs.find((l) => l.date === yStr);
     const yesterdayDone = yEntry?.status === 'done';
     habit.streak = yesterdayDone ? (habit.streak || 0) + 1 : 1;
-    const [yy, mm, dd] = date.split('-').map(Number);
-    habit.lastCompletedDate = new Date(yy, mm - 1, dd);
+    habit.lastCompletedDate = parseYmdLocal(date);
   } else if (status === 'missed') {
     habit.streak = 0;
     habit.lastCompletedDate = null;
@@ -100,23 +83,18 @@ router.post('/:id/log', async (req, res) => {
 
   // Handle Gamification XP
   if (priorStatus !== status) {
-    const User = require('../models/User');
-    const user = await User.findById(req.user.sub);
-    if (user) {
-      let xpDelta = 0;
-      if (status === 'done') {
-        xpDelta = 20; // 20 XP for habit done
-      } else if (priorStatus === 'done' && status === 'missed') {
-        xpDelta = -20; // Revoke XP if changed from done to missed
-      }
-
-      if (xpDelta !== 0) {
-        user.xp = Math.max(0, (user.xp || 0) + xpDelta);
-        user.level = Math.floor(user.xp / 100) + 1;
-        await user.save();
-        if (io) io.to(`user:${req.user.sub}`).emit('xp:updated', { xp: user.xp, level: user.level, delta: xpDelta, message: xpDelta > 0 ? `Completed habit (+${xpDelta} XP)` : `Missed habit (${xpDelta} XP)` });
-      }
+    let xpDelta = 0;
+    if (status === 'done') {
+      xpDelta = HABIT_XP;
+    } else if (priorStatus === 'done' && status === 'missed') {
+      xpDelta = -HABIT_XP;
     }
+    await applyXpDelta({
+      io,
+      userId: req.user.sub,
+      delta: xpDelta,
+      message: xpDelta > 0 ? `Completed habit (+${xpDelta} XP)` : `Missed habit (${xpDelta} XP)`,
+    });
   }
 
   // Emit real-time event to this user's connected clients only

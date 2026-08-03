@@ -24,6 +24,13 @@ jobs:
         env:
           JWT_SECRET: ci_dummy_secret_do_not_use_in_prod_1234567890
           MONGODB_URI: mongodb://127.0.0.1:27017/ci-dummy
+      - name: Cache mongodb-memory-server binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}
+      - name: Run test suite
+        run: npm test
 
   frontend:
     runs-on: ubuntu-latest

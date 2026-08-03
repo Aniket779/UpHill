@@ -1,16 +1,10 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Task = require('../models/Task');
+const { todayLocalString } = require('../lib/dates');
+const { applyXpDelta, taskXpBase } = require('../lib/xp');
 
 const router = express.Router();
-
-function todayLocalString() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 function resolveDateParam(raw) {
   if (raw === 'today' || raw === undefined || raw === '') {
@@ -154,7 +148,7 @@ router.patch('/:id', async (req, res) => {
     return res.status(404).json({ error: 'task not found' });
   }
 
-  const task = await Task.findOneAndUpdate({ _id: id, userId: req.user.sub }, patch, { new: true }).lean();
+  const task = await Task.findOneAndUpdate({ _id: id, userId: req.user.sub }, patch, { returnDocument: 'after' }).lean();
   if (!task) {
     return res.status(404).json({ error: 'task not found' });
   }
@@ -164,22 +158,15 @@ router.patch('/:id', async (req, res) => {
   const isCompleted = task.completed;
   const io = req.app.locals.io;
   
-  if (wasCompleted !== isCompleted && req.user?.sub) {
-    const User = require('../models/User');
-    const user = await User.findById(req.user.sub);
-    if (user) {
-      let xpDelta = 0;
-      const base = task.priority === 'high' ? 50 : task.priority === 'medium' ? 30 : 10;
-      if (isCompleted) {
-        xpDelta = base;
-      } else {
-        xpDelta = -base;
-      }
-      user.xp = Math.max(0, (user.xp || 0) + xpDelta);
-      user.level = Math.floor(user.xp / 100) + 1;
-      await user.save();
-      if (io) io.to(`user:${req.user.sub}`).emit('xp:updated', { xp: user.xp, level: user.level, delta: xpDelta, message: isCompleted ? `Completed task (+${xpDelta} XP)` : `Uncompleted task (${xpDelta} XP)` });
-    }
+  if (wasCompleted !== isCompleted) {
+    const base = taskXpBase(task.priority);
+    const xpDelta = isCompleted ? base : -base;
+    await applyXpDelta({
+      io,
+      userId: req.user.sub,
+      delta: xpDelta,
+      message: isCompleted ? `Completed task (+${xpDelta} XP)` : `Uncompleted task (${xpDelta} XP)`,
+    });
   }
 
   // Emit real-time event to this user's connected clients only

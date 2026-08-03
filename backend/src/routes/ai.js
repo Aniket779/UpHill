@@ -5,6 +5,7 @@ const CoachChatSession = require('../models/CoachChatSession');
 const Feedback = require('../models/Feedback');
 const Task = require('../models/Task');
 const Habit = require('../models/Habit');
+const { lastNDayStrings } = require('../lib/dates');
 
 const router = express.Router();
 
@@ -17,20 +18,6 @@ Rules:
 - Focus on action and accountability: what to do next, by when, and how you'll verify it.
 - Keep replies concise unless the user asks for depth.
 - If they're vague or making excuses, name it and redirect to concrete commitments.`;
-
-function normalizeHabits(v) {
-  return Array.isArray(v) ? v : [];
-}
-
-function asNonNegativeCount(v) {
-  if (typeof v === 'number' && Number.isFinite(v)) {
-    return Math.max(0, Math.floor(v));
-  }
-  if (Array.isArray(v)) {
-    return v.length;
-  }
-  return 0;
-}
 
 function toGeminiHistory(messages) {
   const out = [];
@@ -64,19 +51,6 @@ function sanitizeHistoryForChat(messages) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function last7DayStrings() {
-  const days = [];
-  for (let i = 6; i >= 0; i -= 1) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    days.push(`${y}-${m}-${day}`);
-  }
-  return days;
-}
 
 /**
  * Build a rich, structured data summary for the last 7 days to feed into the prompt.
@@ -209,7 +183,7 @@ router.post('/feedback', async (req, res) => {
   }
 
   try {
-    const days = last7DayStrings();
+    const days = lastNDayStrings(7);
     const context = await buildFeedbackContext(req.user.sub, days);
 
     const prompt = `You are a strict but intelligent productivity coach. Your job is to analyze real behavioral data, detect patterns, and deliver sharp, personalized feedback — not generic advice.
@@ -408,7 +382,7 @@ router.get('/weekly-report', async (req, res) => {
   }
 
   try {
-    const days = last7DayStrings();
+    const days = lastNDayStrings(7);
     const [tasks, habits] = await Promise.all([
       Task.find({ userId: req.user.sub, date: { $in: days } }).sort({ date: 1 }).lean(),
       Habit.find({ userId: req.user.sub }).lean(),

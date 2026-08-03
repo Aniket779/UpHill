@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: uphill-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Secrets — entered in the Render dashboard, never committed:
+      - key: JWT_SECRET
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      # The deployed frontend origin, e.g. https://uphill.vercel.app
+      - key: CORS_ORIGINS
+        sync: false

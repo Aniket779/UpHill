@@ -1,18 +1,10 @@
 const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Task = require('../models/Task');
-const Habit = require('../models/Habit');
+const { todayLocalString } = require('../lib/dates');
 
 const router = express.Router();
 const MODEL_ID = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
-
-function todayLocalString() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 router.post('/analyze-day', async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;

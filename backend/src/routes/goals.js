@@ -1,23 +1,9 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Goal = require('../models/Goal');
+const { weekStartMondayLocal } = require('../lib/dates');
 
 const router = express.Router();
-
-function toYmd(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function weekStartMondayLocal(ref = new Date()) {
-  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
-  const day = d.getDay();
-  const offset = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + offset);
-  return toYmd(d);
-}
 
 function clampProgress(n, max = Infinity) {
   if (Number.isNaN(n) || typeof n !== 'number') return 0;
@@ -87,7 +73,7 @@ router.patch('/:id', async (req, res) => {
   const goal = await Goal.findOneAndUpdate(
     { _id: id, userId: req.user.sub, weekStartDate: week },
     patch,
-    { new: true }
+    { returnDocument: 'after' }
   ).lean();
   if (!goal) {
     return res.status(404).json({ error: 'goal not found' });

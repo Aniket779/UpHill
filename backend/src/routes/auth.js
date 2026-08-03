@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
+const validate = require('../middleware/validate');
+const { registerSchema, loginSchema } = require('../schemas/auth');
 const config = require('../config/env');
 
 const router = express.Router();
@@ -20,24 +22,21 @@ function signUser(user) {
 function setSessionCookie(res, token) {
   res.cookie(config.authCookieName, token, {
     httpOnly: true,
+    // In production the frontend (Vercel) and backend (Render) are on
+    // different domains entirely — a genuinely cross-site request, not just
+    // cross-port like local dev. SameSite=Lax cookies are never sent on
+    // cross-site fetch/XHR, only same-site ones, so production needs
+    // SameSite=None — which browsers require to be paired with Secure.
     secure: config.isProduction,
-    sameSite: 'lax',
+    sameSite: config.isProduction ? 'none' : 'lax',
     maxAge: COOKIE_MAX_AGE_MS,
     path: '/',
   });
 }
 
-router.post('/register', async (req, res) => {
+router.post('/register', validate({ body: registerSchema }), async (req, res) => {
   try {
-    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-    const password = typeof req.body?.password === 'string' ? req.body.password : '';
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'name, email and password are required' });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'password must be at least 6 characters' });
-    }
+    const { name, email, password } = req.body;
     const exists = await User.findOne({ email }).lean();
     if (exists) {
       return res.status(409).json({ error: 'email already registered' });
@@ -54,13 +53,9 @@ router.post('/register', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', validate({ body: loginSchema }), async (req, res) => {
   try {
-    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-    const password = typeof req.body?.password === 'string' ? req.body.password : '';
-    if (!email || !password) {
-      return res.status(400).json({ error: 'email and password are required' });
-    }
+    const { email, password } = req.body;
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({ error: 'invalid credentials' });
@@ -80,7 +75,11 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/logout', (_req, res) => {
-  res.clearCookie(config.authCookieName, { path: '/' });
+  res.clearCookie(config.authCookieName, {
+    path: '/',
+    secure: config.isProduction,
+    sameSite: config.isProduction ? 'none' : 'lax',
+  });
   return res.status(204).end();
 });
 

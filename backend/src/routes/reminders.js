@@ -1,42 +1,10 @@
 const express = require('express');
 const Task = require('../models/Task');
 const Habit = require('../models/Habit');
+const { todayLocalString, addDaysYmd } = require('../lib/dates');
+const { countDoneCalendarStreakFrom } = require('../lib/habitLogs');
 
 const router = express.Router();
-
-function todayLocalString() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function addDaysYmd(ymd, deltaDays) {
-  const [y, mo, da] = ymd.split('-').map(Number);
-  const dt = new Date(y, mo - 1, da);
-  dt.setDate(dt.getDate() + deltaDays);
-  const yy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  const dd = String(dt.getDate()).padStart(2, '0');
-  return `${yy}-${mm}-${dd}`;
-}
-
-/** Consecutive calendar days with a `done` log, walking backward from endYmd (inclusive). */
-function countDoneCalendarStreakFrom(logs, endYmd) {
-  const map = new Map((logs || []).map((l) => [l.date, l.status]));
-  let count = 0;
-  let cur = endYmd;
-  for (;;) {
-    if (map.get(cur) === 'done') {
-      count += 1;
-      cur = addDaysYmd(cur, -1);
-    } else {
-      break;
-    }
-  }
-  return count;
-}
 
 router.get('/', async (req, res) => {
   try {

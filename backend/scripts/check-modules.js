@@ -1,16 +1,15 @@
 /**
- * Smoke check for CI: requires every route/model/middleware/config module
- * so syntax errors, missing dependencies, and broken imports fail loudly —
- * without needing a live MongoDB connection or open port (unlike requiring
- * index.js directly, which immediately connects to Mongo and starts listening).
- *
- * There's no real test suite yet; this is the cheapest thing that would have
- * caught bugs like a route requiring a module that doesn't exist.
+ * Smoke check for CI: requires every route/model/middleware/config/schema
+ * module so syntax errors, missing dependencies, and broken imports fail
+ * loudly — without needing a live MongoDB connection or open port (unlike
+ * requiring index.js directly, which immediately connects to Mongo and
+ * starts listening). The real test suite (npm test) covers behavior; this
+ * just covers "does everything still load."
  */
 const fs = require('fs');
 const path = require('path');
 
-const DIRS = ['config', 'middleware', 'models', 'routes', 'socket'];
+const DIRS = ['config', 'lib', 'middleware', 'models', 'routes', 'schemas', 'socket'];
 
 let failures = 0;
 
