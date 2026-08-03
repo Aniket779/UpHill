@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { apiFetch } from '../lib/api'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
-const SESSION_KEY = 'grindos_coach_chat_session_id'
+const SESSION_KEY = 'uphill_coach_chat_session_id'
 
 export default function ChatPage() {
   const [sessionId, setSessionId] = useState(() => localStorage.getItem(SESSION_KEY) ?? null)

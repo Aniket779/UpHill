@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const notificationSchema = new mongoose.Schema({
-  userId: { type: String, required: true }, // Using string to match other models if they use string, or ObjectId if preferred.
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   type: { 
     type: String, 
     enum: ['goal_missed', 'streak_at_risk', 'inactivity', 'milestone', 'system'],

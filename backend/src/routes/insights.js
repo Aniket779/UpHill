@@ -69,14 +69,14 @@ function sortLogsByDate(logs) {
 }
 
 /** Smart reminder copy for Today / Habits banners (GET /insights/reminders). */
-router.get('/reminders', async (_req, res) => {
+router.get('/reminders', async (req, res) => {
   try {
     const today = todayLocalString();
     const yesterday = addDaysYmd(today, -1);
 
     const [tasks, habits] = await Promise.all([
-      Task.find({ date: today }).lean(),
-      Habit.find().lean(),
+      Task.find({ userId: req.user.sub, date: today }).lean(),
+      Habit.find({ userId: req.user.sub }).lean(),
     ]);
 
     const openHigh = tasks.filter((t) => !t.completed && t.priority === 'high');
@@ -153,7 +153,7 @@ router.get('/', async (req, res) => {
       return `${y}-${m}-${day}`;
     })();
 
-    const habits = await Habit.find().lean();
+    const habits = await Habit.find({ userId: req.user.sub }).lean();
 
     let totalDone = 0;
     let totalMissed = 0;
@@ -310,7 +310,7 @@ router.get('/', async (req, res) => {
 // Pure heuristic engine — no ML. Scores the user across multiple signals,
 // maps to a risk level, and returns a single prediction + reason.
 
-router.get('/predictions', async (_req, res) => {
+router.get('/predictions', async (req, res) => {
   try {
     const today = todayLocalString();
 
@@ -325,8 +325,8 @@ router.get('/predictions', async (_req, res) => {
     }
 
     const [tasks, habits] = await Promise.all([
-      Task.find({ date: { $in: days7 } }).lean(),
-      Habit.find().lean(),
+      Task.find({ userId: req.user.sub, date: { $in: days7 } }).lean(),
+      Habit.find({ userId: req.user.sub }).lean(),
     ]);
 
     // ── Signal 1: Task completion rate – last 3 days ──────────────────────────

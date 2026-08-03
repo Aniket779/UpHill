@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { formatHeading, todayLocalString, addDays, getShortWeekday, getNumericDay } from '../utils/date'
 import { apiFetch } from '../lib/api'
 import { useSocket } from '../hooks/useSocket'
+import AgentSuggestion from '../components/AgentSuggestion'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -368,6 +369,9 @@ export default function TodayPage() {
           
           {/* Main Content Area (Tasks) */}
           <section className="space-y-6">
+            
+            {isToday && <AgentSuggestion onTaskUpdated={load} />}
+
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 shadow-xl shadow-black/40 backdrop-blur-md">
               <h2 className="text-sm font-semibold text-white">Add task</h2>
               <form onSubmit={addTask} className="mt-4 space-y-4">

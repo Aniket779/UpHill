@@ -27,13 +27,13 @@ router.post('/', async (req, res) => {
   if (!name) {
     return res.status(400).json({ error: 'name is required' });
   }
-  const habit = await Habit.create({ name });
+  const habit = await Habit.create({ userId: req.user.sub, name });
   return res.status(201).json(habit);
 });
 
-router.get('/streaks', async (_req, res) => {
+router.get('/streaks', async (req, res) => {
   try {
-    const habits = await Habit.find()
+    const habits = await Habit.find({ userId: req.user.sub })
       .select('name streak lastCompletedDate')
       .sort({ streak: -1, name: 1 })
       .lean();
@@ -50,8 +50,8 @@ router.get('/streaks', async (_req, res) => {
   }
 });
 
-router.get('/', async (_req, res) => {
-  const habits = await Habit.find().sort({ createdAt: -1 }).lean();
+router.get('/', async (req, res) => {
+  const habits = await Habit.find({ userId: req.user.sub }).sort({ createdAt: -1 }).lean();
   return res.json(habits);
 });
 
@@ -69,7 +69,7 @@ router.post('/:id/log', async (req, res) => {
     ? req.body.date
     : todayLocalString();
 
-  const habit = await Habit.findById(id);
+  const habit = await Habit.findOne({ _id: id, userId: req.user.sub });
   if (!habit) {
     return res.status(404).json({ error: 'habit not found' });
   }
@@ -96,9 +96,31 @@ router.post('/:id/log', async (req, res) => {
 
   await habit.save();
 
-  // Emit real-time event to all connected clients
   const io = req.app.locals.io;
-  if (io) io.emit('habit:updated', habit);
+
+  // Handle Gamification XP
+  if (priorStatus !== status) {
+    const User = require('../models/User');
+    const user = await User.findById(req.user.sub);
+    if (user) {
+      let xpDelta = 0;
+      if (status === 'done') {
+        xpDelta = 20; // 20 XP for habit done
+      } else if (priorStatus === 'done' && status === 'missed') {
+        xpDelta = -20; // Revoke XP if changed from done to missed
+      }
+
+      if (xpDelta !== 0) {
+        user.xp = Math.max(0, (user.xp || 0) + xpDelta);
+        user.level = Math.floor(user.xp / 100) + 1;
+        await user.save();
+        if (io) io.to(`user:${req.user.sub}`).emit('xp:updated', { xp: user.xp, level: user.level, delta: xpDelta, message: xpDelta > 0 ? `Completed habit (+${xpDelta} XP)` : `Missed habit (${xpDelta} XP)` });
+      }
+    }
+  }
+
+  // Emit real-time event to this user's connected clients only
+  if (io) io.to(`user:${req.user.sub}`).emit('habit:updated', habit);
 
   return res.json(habit);
 });

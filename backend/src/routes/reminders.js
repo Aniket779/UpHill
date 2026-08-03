@@ -38,14 +38,14 @@ function countDoneCalendarStreakFrom(logs, endYmd) {
   return count;
 }
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
     const today = todayLocalString();
     const yesterday = addDaysYmd(today, -1);
 
     const [tasks, habits] = await Promise.all([
-      Task.find({ date: today }).lean(),
-      Habit.find().lean(),
+      Task.find({ userId: req.user.sub, date: today }).lean(),
+      Habit.find({ userId: req.user.sub }).lean(),
     ]);
 
     const reminders = [];

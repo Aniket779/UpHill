@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { NavLink, Navigate, Outlet, Route, Routes, useNavigate, useLocation } from 'react-router-dom'
 import { SunIcon, CalendarIcon, MessageIcon, TargetIcon, UserIcon, BarChartIcon, CheckCircleIcon, SearchIcon, CommandIcon } from './components/Icons'
 import HabitsPage from './pages/HabitsPage'
@@ -10,18 +11,35 @@ import ChatPage from './pages/ChatPage'
 import InsightsPage from './pages/InsightsPage'
 import FocusPage from './pages/FocusPage'
 import AuthPage from './pages/AuthPage'
-import { clearToken, getToken } from './lib/auth'
-import { disconnectSocket } from './lib/socket'
+import { AuthProvider } from './lib/auth'
+import { useAuth } from './lib/useAuth'
+import { disconnectSocket, getSocket } from './lib/socket'
 import NotificationsPopover from './components/NotificationsPopover'
 import CommandPalette from './components/CommandPalette'
+import LevelBar from './components/LevelBar'
 
 function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
-  const token = getToken()
+  const { user, setUser, logout } = useAuth()
 
   const path = location.pathname.split('/')[1] || 'Today'
   const breadcrumb = path.charAt(0).toUpperCase() + path.slice(1)
+
+  useEffect(() => {
+    if (!user) return
+
+    const socket = getSocket()
+    const onXpUpdated = (data) => {
+      setUser(prev => prev ? { ...prev, xp: data.xp, level: data.level } : prev)
+    }
+
+    socket.on('xp:updated', onXpUpdated)
+
+    return () => {
+      socket.off('xp:updated', onXpUpdated)
+    }
+  }, [user, setUser])
 
   return (
     <div className="min-h-screen text-slate-100 flex flex-col lg:flex-row font-sans">
@@ -31,7 +49,7 @@ function Layout() {
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
               <span className="text-white font-bold text-sm">G</span>
             </div>
-            <span className="text-sm font-semibold tracking-wide text-slate-200">GrindOS</span>
+            <span className="text-sm font-semibold tracking-wide text-slate-200">UpHill</span>
           </div>
         </div>
 
@@ -92,9 +110,9 @@ function Layout() {
           </div>
         </div>
 
-        {token && (
+        {user && (
           <div className="hidden lg:block p-4 mt-auto border-t border-white/5">
-            <div 
+            <div
               onClick={() => navigate('/profile')}
               className="flex items-center justify-between p-2 rounded-xl hover:bg-white/5 cursor-pointer transition"
             >
@@ -103,23 +121,24 @@ function Layout() {
                   <UserIcon className="h-4 w-4 text-slate-400" />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-slate-200">User</p>
+                  <p className="text-xs font-medium text-slate-200">{user?.name || 'User'}</p>
                   <p className="text-[10px] text-slate-500">Free Plan</p>
                 </div>
               </div>
-              <button 
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  clearToken();
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  await logout();
                   disconnectSocket();
-                  navigate('/auth'); 
-                }} 
-                className="text-xs text-slate-500 hover:text-rose-400 transition" 
+                  navigate('/auth');
+                }}
+                className="text-xs text-slate-500 hover:text-rose-400 transition"
                 title="Logout"
               >
                 Logout
               </button>
             </div>
+            {user && <LevelBar level={user.level || 1} xp={user.xp || 0} />}
           </div>
         )}
       </aside>
@@ -127,7 +146,7 @@ function Layout() {
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <header className="h-14 lg:h-16 flex items-center justify-between px-4 lg:px-8 border-b border-white/5 backdrop-blur-md bg-slate-950/20 z-40 sticky top-0">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-400">
-            <span className="hover:text-slate-200 cursor-pointer transition">GrindOS</span>
+            <span className="hover:text-slate-200 cursor-pointer transition">UpHill</span>
             <span>/</span>
             <span className="text-slate-200">{breadcrumb}</span>
           </div>
@@ -158,13 +177,17 @@ function Layout() {
 }
 
 function RequireAuth({ children }) {
-  if (!getToken()) return <Navigate to="/auth" replace />
+  const { user, loading } = useAuth()
+  if (loading) {
+    return <div className="min-h-screen bg-slate-950" />
+  }
+  if (!user) return <Navigate to="/auth" replace />
   return children
 }
 
 export default function App() {
   return (
-    <>
+    <AuthProvider>
       <Routes>
         <Route path="auth" element={<AuthPage />} />
         <Route
@@ -187,6 +210,6 @@ export default function App() {
         </Route>
       </Routes>
       <CommandPalette />
-    </>
+    </AuthProvider>
   )
 }

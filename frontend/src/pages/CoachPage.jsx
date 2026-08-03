@@ -167,7 +167,7 @@ export default function CoachPage() {
     try {
       // The backend now fetches all context itself — no need to send anything
       const userId =
-        typeof localStorage !== 'undefined' ? localStorage.getItem('grindos_user_id') : null
+        typeof localStorage !== 'undefined' ? localStorage.getItem('uphill_user_id') : null
 
       const res = await apiFetch(`${apiBase}/ai/feedback`, {
         method: 'POST',

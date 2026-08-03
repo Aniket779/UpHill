@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { setToken } from '../lib/auth'
+import { useAuth } from '../lib/useAuth'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
 export default function AuthPage() {
   const navigate = useNavigate()
+  const { setUser } = useAuth()
   const [mode, setMode] = useState('login')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -26,14 +27,15 @@ export default function AuthPage() {
       const res = await fetch(`${apiBase}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(body),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok || typeof data.token !== 'string') {
+      if (!res.ok || !data.user) {
         setError(data.error || 'Authentication failed.')
         return
       }
-      setToken(data.token)
+      setUser(data.user)
       navigate('/')
     } finally {
       setLoading(false)
@@ -46,7 +48,7 @@ export default function AuthPage() {
         <h1 className="text-2xl font-semibold text-white">
           {mode === 'login' ? 'Login' : 'Create account'}
         </h1>
-        <p className="mt-2 text-sm text-slate-400">JWT authentication enabled.</p>
+        <p className="mt-2 text-sm text-slate-400">Secure session-based sign-in.</p>
 
         <form onSubmit={submit} className="mt-6 space-y-3">
           {mode === 'register' && (

@@ -18,9 +18,12 @@ function todayLocal() {
   return ymdOffset(0);
 }
 
-router.get('/summary', async (_req, res) => {
+router.get('/summary', async (req, res) => {
   try {
-    const [tasks, habits] = await Promise.all([Task.find().lean(), Habit.find().lean()]);
+    const [tasks, habits] = await Promise.all([
+      Task.find({ userId: req.user.sub }).lean(),
+      Habit.find({ userId: req.user.sub }).lean(),
+    ]);
     const totalTasks = tasks.length;
     const completedTasks = tasks.filter((t) => t.completed).length;
     const completedPercent = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -70,9 +73,12 @@ router.get('/summary', async (_req, res) => {
   }
 });
 
-router.get('/contributions', async (_req, res) => {
+router.get('/contributions', async (req, res) => {
   try {
-    const [tasks, habits] = await Promise.all([Task.find().lean(), Habit.find().lean()]);
+    const [tasks, habits] = await Promise.all([
+      Task.find({ userId: req.user.sub }).lean(),
+      Habit.find({ userId: req.user.sub }).lean(),
+    ]);
     const activityMap = {};
 
     for (const t of tasks) {

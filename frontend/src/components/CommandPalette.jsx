@@ -28,6 +28,8 @@ export default function CommandPalette() {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
+        setQuery('')
+        setSelectedIndex(0)
         setIsOpen((open) => !open)
       }
       if (e.key === 'Escape' && isOpen) {
@@ -40,17 +42,20 @@ export default function CommandPalette() {
 
   // Custom event to open from other components
   useEffect(() => {
-    const handleOpen = () => setIsOpen(true)
+    const handleOpen = () => {
+      setQuery('')
+      setSelectedIndex(0)
+      setIsOpen(true)
+    }
     window.addEventListener('open-command-palette', handleOpen)
     return () => window.removeEventListener('open-command-palette', handleOpen)
   }, [])
 
   useEffect(() => {
     if (isOpen) {
-      setQuery('')
-      setSelectedIndex(0)
       // Focus after small delay to let render happen
-      setTimeout(() => inputRef.current?.focus(), 50)
+      const id = setTimeout(() => inputRef.current?.focus(), 50)
+      return () => clearTimeout(id)
     }
   }, [isOpen])
 
@@ -63,10 +68,6 @@ export default function CommandPalette() {
   if (showAddTask) {
     items.unshift({ id: 'add-task', title: `Add task: "${query.trim()}"`, isAction: true })
   }
-
-  useEffect(() => {
-    setSelectedIndex(0)
-  }, [query])
 
   const handleKeyDown = async (e) => {
     if (e.key === 'ArrowDown') {
@@ -130,7 +131,10 @@ export default function CommandPalette() {
             className="flex-1 bg-transparent px-4 text-sm text-white placeholder:text-slate-500 focus:outline-none"
             placeholder="Type a command or search..."
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setSelectedIndex(0)
+            }}
             onKeyDown={handleKeyDown}
             disabled={isSubmitting}
           />

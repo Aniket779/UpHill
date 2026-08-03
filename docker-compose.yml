@@ -1,0 +1,45 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - '27017:27017'
+
+  backend:
+    build:
+      context: ./backend
+    command: npm run dev
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/uphill
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - '5000:5000'
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/scripts:/app/scripts
+
+  frontend:
+    build:
+      context: ./frontend
+    command: npm run dev
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      BACKEND_URL: http://backend:5000
+    ports:
+      - '5173:5173'
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
+
+volumes:
+  mongo_data:

@@ -1,6 +1,5 @@
 const express = require('express');
 const crypto = require('crypto');
-const mongoose = require('mongoose');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const CoachChatSession = require('../models/CoachChatSession');
 const Feedback = require('../models/Feedback');
@@ -82,12 +81,12 @@ function last7DayStrings() {
 /**
  * Build a rich, structured data summary for the last 7 days to feed into the prompt.
  */
-async function buildFeedbackContext(days) {
+async function buildFeedbackContext(userId, days) {
   const Goal = require('../models/Goal');
   const [tasks, habits, goals] = await Promise.all([
-    Task.find({ date: { $in: days } }).lean(),
-    Habit.find().lean(),
-    Goal.find().lean(),
+    Task.find({ userId, date: { $in: days } }).lean(),
+    Habit.find({ userId }).lean(),
+    Goal.find({ userId }).lean(),
   ]);
 
   // ── Task stats ──────────────────────────────────────────────────────────────
@@ -211,7 +210,7 @@ router.post('/feedback', async (req, res) => {
 
   try {
     const days = last7DayStrings();
-    const context = await buildFeedbackContext(days);
+    const context = await buildFeedbackContext(req.user.sub, days);
 
     const prompt = `You are a strict but intelligent productivity coach. Your job is to analyze real behavioral data, detect patterns, and deliver sharp, personalized feedback — not generic advice.
 
@@ -277,14 +276,7 @@ Rules:
       `Coach Insight: ${parsed.insight}`,
     ].join('\n\n');
 
-    let userId = 'anonymous';
-    const rawUid = req.body?.userId;
-    if (typeof rawUid === 'string' && rawUid.trim()) {
-      const u = rawUid.trim();
-      userId = mongoose.Types.ObjectId.isValid(u) ? new mongoose.Types.ObjectId(u) : u;
-    }
-
-    const saved = await Feedback.create({ userId, text: feedbackText });
+    const saved = await Feedback.create({ userId: req.user.sub, text: feedbackText });
     const savedDoc = saved.toObject();
     if (savedDoc._id) savedDoc._id = String(savedDoc._id);
 
@@ -309,9 +301,9 @@ Rules:
 });
 
 
-router.get('/feedback-history', async (_req, res) => {
+router.get('/feedback-history', async (req, res) => {
   try {
-    const items = await Feedback.find()
+    const items = await Feedback.find({ userId: req.user.sub })
       .sort({ createdAt: -1 })
       .limit(10)
       .lean();
@@ -327,19 +319,6 @@ router.get('/feedback-history', async (_req, res) => {
     return res.status(500).json({ error: 'Failed to load feedback history.' });
   }
 });
-
-function last7DayStrings() {
-  const days = [];
-  for (let i = 6; i >= 0; i -= 1) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    days.push(`${y}-${m}-${day}`);
-  }
-  return days;
-}
 
 function parseWeeklyReportJson(raw) {
   let t = typeof raw === 'string' ? raw.trim() : '';
@@ -422,7 +401,7 @@ Rules:
   }
 });
 
-router.get('/weekly-report', async (_req, res) => {
+router.get('/weekly-report', async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || !String(apiKey).trim()) {
     return res.status(503).json({ error: 'GEMINI_API_KEY not configured.' });
@@ -431,8 +410,8 @@ router.get('/weekly-report', async (_req, res) => {
   try {
     const days = last7DayStrings();
     const [tasks, habits] = await Promise.all([
-      Task.find({ date: { $in: days } }).sort({ date: 1 }).lean(),
-      Habit.find().lean(),
+      Task.find({ userId: req.user.sub, date: { $in: days } }).sort({ date: 1 }).lean(),
+      Habit.find({ userId: req.user.sub }).lean(),
     ]);
 
     const habitSummaries = habits.map((h) => ({
@@ -505,7 +484,7 @@ router.get('/chat', async (req, res) => {
     return res.status(400).json({ error: 'sessionId query parameter is required' });
   }
   try {
-    const session = await CoachChatSession.findOne({ sessionId: sid }).lean();
+    const session = await CoachChatSession.findOne({ sessionId: sid, userId: req.user.sub }).lean();
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -539,13 +518,14 @@ router.post('/chat', async (req, res) => {
       : null;
 
   try {
-    if (!sessionId) {
-      sessionId = crypto.randomUUID();
-    }
-
-    let session = await CoachChatSession.findOne({ sessionId });
+    let session = sessionId
+      ? await CoachChatSession.findOne({ sessionId, userId: req.user.sub })
+      : null;
     if (!session) {
-      session = await CoachChatSession.create({ sessionId, messages: [] });
+      // No sessionId, or it doesn't belong to this user — start a fresh session
+      // rather than ever attaching to (or leaking the existence of) someone else's.
+      sessionId = crypto.randomUUID();
+      session = await CoachChatSession.create({ sessionId, userId: req.user.sub, messages: [] });
     }
 
     const historyMessages = sanitizeHistoryForChat(session.messages);

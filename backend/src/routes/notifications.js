@@ -19,8 +19,8 @@ async function analyzeAndGenerate(userId) {
 
   // 1. Check for skipped goals
   // If there are goals for this week but progress is low and no tasks completed today
-  const goals = await Goal.find().lean();
-  const todayTasks = await Task.find({ date: today }).lean();
+  const goals = await Goal.find({ userId }).lean();
+  const todayTasks = await Task.find({ userId, date: today }).lean();
   const completedToday = todayTasks.filter(t => t.completed).length;
 
   if (goals.length > 0 && completedToday === 0) {
@@ -45,7 +45,7 @@ async function analyzeAndGenerate(userId) {
   }
 
   // 3. Check for habits/streaks at risk
-  const habits = await Habit.find().lean();
+  const habits = await Habit.find({ userId }).lean();
   for (const habit of habits) {
     const todayLog = (habit.logs || []).find(l => l.date === today);
     if (!todayLog && habit.streak > 0) {
@@ -85,7 +85,7 @@ async function analyzeAndGenerate(userId) {
 // GET /notifications
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id || req.user._id;
+    const userId = req.user.sub;
     
     // Trigger analysis
     await analyzeAndGenerate(userId);
@@ -105,7 +105,13 @@ router.get('/', authMiddleware, async (req, res) => {
 router.post('/:id/dismiss', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    await Notification.findByIdAndUpdate(id, { dismissed: true });
+    const updated = await Notification.findOneAndUpdate(
+      { _id: id, userId: req.user.sub },
+      { dismissed: true }
+    );
+    if (!updated) {
+      return res.status(404).json({ error: 'notification not found' });
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to dismiss notification' });

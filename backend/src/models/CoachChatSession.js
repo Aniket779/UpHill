@@ -10,6 +10,7 @@ const messageSchema = new mongoose.Schema(
 );
 
 const coachChatSessionSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   sessionId: { type: String, required: true, unique: true, index: true },
   messages: [messageSchema],
   updatedAt: { type: Date, default: Date.now },

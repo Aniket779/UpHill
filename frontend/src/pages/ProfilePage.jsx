@@ -24,7 +24,9 @@ export default function ProfilePage() {
   }, [])
 
   useEffect(() => {
-    load()
+    void (async () => {
+      await load()
+    })()
   }, [load])
 
   const renderGrid = () => {
@@ -34,11 +36,6 @@ export default function ProfilePage() {
     const firstDate = new Date(data.contributions[0].date + 'T00:00:00') // force local parse
     const startDayOfWeek = firstDate.getDay()
     const padded = [...Array(startDayOfWeek).fill(null), ...data.contributions]
-    
-    // Debug: log today and yesterday's counts
-    const last = data.contributions[data.contributions.length - 1]
-    const prev = data.contributions[data.contributions.length - 2]
-    console.log('[Profile] Today:', last, '  Yesterday:', prev)
 
     return (
       <div className="overflow-x-auto pb-4">
@@ -96,7 +93,7 @@ export default function ProfilePage() {
               User Profile
             </h1>
             <p className="mt-2 text-sm text-slate-400">
-              GrindOS Pro Member
+              UpHill Pro Member
             </p>
           </div>
         </div>

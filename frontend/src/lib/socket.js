@@ -1,5 +1,4 @@
 import { io } from 'socket.io-client'
-import { getToken } from './auth'
 
 const SOCKET_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace(/\/+$/, '')
@@ -9,20 +8,19 @@ let socket = null
 
 /**
  * Returns the shared socket instance, creating and connecting it on first call.
- * The JWT token is sent in the handshake auth payload so the backend can verify it.
+ * withCredentials sends the httpOnly session cookie in the handshake so the
+ * backend can authenticate the connection the same way it does HTTP requests.
  */
 export function getSocket() {
   if (!socket) {
     socket = io(SOCKET_URL, {
       autoConnect: false,
-      auth: { token: getToken() },
+      withCredentials: true,
       transports: ['websocket', 'polling'],
     })
   }
 
   if (!socket.connected) {
-    // Refresh the token in case it changed since the socket was created
-    socket.auth = { token: getToken() }
     socket.connect()
   }
 

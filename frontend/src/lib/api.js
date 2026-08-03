@@ -1,8 +1,7 @@
-import { getToken } from './auth'
-
+/**
+ * Fetch wrapper that always sends the httpOnly session cookie.
+ * Auth is cookie-based — there is no client-readable token to attach.
+ */
 export async function apiFetch(input, init = {}) {
-  const headers = new Headers(init.headers || {})
-  const token = getToken()
-  if (token) headers.set('Authorization', `Bearer ${token}`)
-  return fetch(input, { ...init, headers })
+  return fetch(input, { ...init, credentials: 'include' })
 }

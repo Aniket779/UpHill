@@ -64,6 +64,7 @@ router.post('/', async (req, res) => {
   const date = dateParam.date;
 
   const task = await Task.create({
+    userId: req.user.sub,
     title,
     completed: false,
     priority,
@@ -76,16 +77,16 @@ router.post('/', async (req, res) => {
     goalId,
   });
 
-  // Emit real-time event to all connected clients
+  // Emit real-time event to this user's connected clients only
   const io = req.app.locals.io;
-  if (io) io.emit('task:created', task);
+  if (io) io.to(`user:${req.user.sub}`).emit('task:created', task);
 
   return res.status(201).json(task);
 });
 
 router.get('/board', async (req, res) => {
-  // Fetch all tasks for the Kanban board
-  const tasks = await Task.find({}).lean();
+  // Fetch this user's tasks for the Kanban board
+  const tasks = await Task.find({ userId: req.user.sub }).lean();
   return res.json(tasks);
 });
 
@@ -94,7 +95,7 @@ router.get('/', async (req, res) => {
   if (!resolved.ok) {
     return res.status(400).json({ error: resolved.error });
   }
-  const query = { date: resolved.date };
+  const query = { userId: req.user.sub, date: resolved.date };
   if (typeof req.query.category === 'string' && req.query.category.trim()) {
     query.category = req.query.category.trim().toLowerCase();
   }
@@ -140,17 +141,49 @@ router.patch('/:id', async (req, res) => {
   if (typeof req.body?.duration === 'number' && req.body.duration > 0) patch.duration = req.body.duration;
   if (req.body?.duration === null) patch.duration = null;
 
+  if (typeof req.body?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.body.date)) {
+    patch.date = req.body.date;
+  }
+
   if (Object.keys(patch).length === 0) {
     return res.status(400).json({ error: 'no valid fields to update' });
   }
-  const task = await Task.findByIdAndUpdate(id, patch, { new: true }).lean();
+
+  const oldTask = await Task.findOne({ _id: id, userId: req.user.sub }).lean();
+  if (!oldTask) {
+    return res.status(404).json({ error: 'task not found' });
+  }
+
+  const task = await Task.findOneAndUpdate({ _id: id, userId: req.user.sub }, patch, { new: true }).lean();
   if (!task) {
     return res.status(404).json({ error: 'task not found' });
   }
 
-  // Emit real-time event to all connected clients
+  // Handle Gamification XP
+  const wasCompleted = oldTask.completed;
+  const isCompleted = task.completed;
   const io = req.app.locals.io;
-  if (io) io.emit('task:updated', task);
+  
+  if (wasCompleted !== isCompleted && req.user?.sub) {
+    const User = require('../models/User');
+    const user = await User.findById(req.user.sub);
+    if (user) {
+      let xpDelta = 0;
+      const base = task.priority === 'high' ? 50 : task.priority === 'medium' ? 30 : 10;
+      if (isCompleted) {
+        xpDelta = base;
+      } else {
+        xpDelta = -base;
+      }
+      user.xp = Math.max(0, (user.xp || 0) + xpDelta);
+      user.level = Math.floor(user.xp / 100) + 1;
+      await user.save();
+      if (io) io.to(`user:${req.user.sub}`).emit('xp:updated', { xp: user.xp, level: user.level, delta: xpDelta, message: isCompleted ? `Completed task (+${xpDelta} XP)` : `Uncompleted task (${xpDelta} XP)` });
+    }
+  }
+
+  // Emit real-time event to this user's connected clients only
+  if (io) io.to(`user:${req.user.sub}`).emit('task:updated', task);
 
   return res.json(task);
 });

@@ -19,9 +19,9 @@ function weekStartMondayLocal(ref = new Date()) {
   return toYmd(d);
 }
 
-function clampProgress(n) {
+function clampProgress(n, max = Infinity) {
   if (Number.isNaN(n) || typeof n !== 'number') return 0;
-  return Math.max(0, Math.round(n));
+  return Math.max(0, Math.min(max, Math.round(n)));
 }
 
 function clampTarget(n) {
@@ -43,19 +43,19 @@ router.post('/', async (req, res) => {
   if (typeof req.body?.weekStartDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.body.weekStartDate)) {
     weekStartDate = req.body.weekStartDate;
   }
-  const progress =
-    typeof req.body?.progress === 'number' ? clampProgress(req.body.progress) : 0;
   const target = typeof req.body?.target === 'number' ? clampTarget(req.body.target) : 100;
+  const progress =
+    typeof req.body?.progress === 'number' ? clampProgress(req.body.progress, target) : 0;
   const taskIds = parseObjectIdList(req.body?.taskIds);
   const habitIds = parseObjectIdList(req.body?.habitIds);
 
-  const goal = await Goal.create({ title, progress, target, weekStartDate, taskIds, habitIds });
+  const goal = await Goal.create({ userId: req.user.sub, title, progress, target, weekStartDate, taskIds, habitIds });
   return res.status(201).json(goal);
 });
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   const week = weekStartMondayLocal();
-  const goals = await Goal.find({ weekStartDate: week }).sort({ createdAt: 1 }).lean();
+  const goals = await Goal.find({ userId: req.user.sub, weekStartDate: week }).sort({ createdAt: 1 }).lean();
   return res.json(goals);
 });
 
@@ -64,18 +64,28 @@ router.patch('/:id', async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ error: 'invalid goal id' });
   }
+  const week = weekStartMondayLocal();
+  const existing = await Goal.findOne({ _id: id, userId: req.user.sub, weekStartDate: week }).lean();
+  if (!existing) {
+    return res.status(404).json({ error: 'goal not found' });
+  }
   const patch = {};
-  if (typeof req.body?.progress === 'number') patch.progress = clampProgress(req.body.progress);
   if (typeof req.body?.target === 'number') patch.target = clampTarget(req.body.target);
+  const effectiveTarget = patch.target ?? existing.target;
+  if (typeof req.body?.progress === 'number') {
+    patch.progress = clampProgress(req.body.progress, effectiveTarget);
+  } else if (patch.target !== undefined && existing.progress > effectiveTarget) {
+    // Target shrank below the existing progress — pull progress back in line.
+    patch.progress = effectiveTarget;
+  }
   if (req.body?.taskIds !== undefined) patch.taskIds = parseObjectIdList(req.body.taskIds);
   if (req.body?.habitIds !== undefined) patch.habitIds = parseObjectIdList(req.body.habitIds);
   if (typeof req.body?.title === 'string' && req.body.title.trim()) patch.title = req.body.title.trim();
   if (Object.keys(patch).length === 0) {
     return res.status(400).json({ error: 'no valid fields to update' });
   }
-  const week = weekStartMondayLocal();
   const goal = await Goal.findOneAndUpdate(
-    { _id: id, weekStartDate: week },
+    { _id: id, userId: req.user.sub, weekStartDate: week },
     patch,
     { new: true }
   ).lean();
