@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { todayLocalString } from '../utils/date'
 import { apiFetch } from '../lib/api'
 import { useSocket } from '../hooks/useSocket'
+import { FlameIcon, CheckCircleIcon } from '../components/Icons'
+import Card from '../components/ui/Card'
+import Button from '../components/ui/Button'
+import Input from '../components/ui/Input'
+import EmptyState from '../components/ui/EmptyState'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -14,21 +19,21 @@ function HabitActivityGrid({ logs }) {
   const days = useMemo(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    
+
     const dayOfWeek = today.getDay()
     const startDate = new Date(today)
     startDate.setDate(today.getDate() - dayOfWeek - (12 * 7))
-    
+
     const arr = []
     for (let i = 0; i < 91; i++) {
       const d = new Date(startDate)
       d.setDate(startDate.getDate() + i)
       const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      
+
       const isFuture = d > today
       const log = logs?.find(l => l.date === ymd)
       const isDone = log?.status === 'done'
-      
+
       arr.push({ ymd, isFuture, isDone })
     }
     return arr
@@ -42,11 +47,11 @@ function HabitActivityGrid({ logs }) {
             key={day.ymd}
             title={day.isFuture ? '' : `${day.ymd}: ${day.isDone ? 'Done' : 'Missed'}`}
             className={`h-2.5 w-2.5 rounded-[2px] transition-colors ${
-              day.isFuture 
-                ? 'bg-transparent' 
-                : day.isDone 
-                  ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.3)]' 
-                  : 'bg-slate-800/80 hover:bg-slate-700'
+              day.isFuture
+                ? 'bg-transparent'
+                : day.isDone
+                  ? 'bg-success'
+                  : 'bg-surface-tertiary hover:bg-border-strong'
             }`}
           />
         ))}
@@ -135,96 +140,87 @@ export default function HabitsPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="rounded-3xl border border-white/5 bg-white/[0.02] shadow-2xl backdrop-blur-3xl p-6 lg:p-10 mb-8">
-        <header className="mb-10">
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Habits</h1>
-          <p className="mt-2 max-w-lg text-sm leading-relaxed text-slate-400">
-            Build streaks by logging each habit once per day. Today&apos;s status updates instantly.
-          </p>
-        </header>
+      <header className="mb-8">
+        <h1 className="text-display text-ink">Habits</h1>
+        <p className="mt-2 max-w-lg text-sm leading-relaxed text-ink-tertiary">
+          Build streaks by logging each habit once per day. Today&apos;s status updates instantly.
+        </p>
+      </header>
 
-        <form
-          onSubmit={addHabit}
-          className="mb-8 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 shadow-xl shadow-black/40 backdrop-blur-md sm:flex-row sm:items-center"
-        >
-          <input
+      <Card padding="p-4" className="mb-6">
+        <form onSubmit={addHabit} className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="New habit name"
-            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            className="min-w-0 flex-1"
           />
-          <button
-            type="submit"
-            className="shrink-0 rounded-xl bg-emerald-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400 active:bg-emerald-600 shadow-[0_0_15px_rgba(16,185,129,0.4)]"
-          >
+          <Button type="submit" className="shrink-0">
             Add habit
-          </button>
+          </Button>
         </form>
+      </Card>
 
-        {error && (
-          <p
-            className="mb-6 rounded-xl border border-red-900/40 bg-red-950/30 px-4 py-3 text-sm text-red-200"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+      {error && (
+        <p className="mb-6 rounded-control border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger" role="alert">
+          {error}
+        </p>
+      )}
 
-        {loading ? (
-          <p className="text-center text-sm text-slate-500">Loading habits…</p>
-        ) : habits.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-800 py-16 text-center">
-            <p className="text-sm text-slate-500">No habits yet. Add your first one above.</p>
-          </div>
-        ) : (
-          <ul className="space-y-3">
-            {habits.map((h) => {
-              const log = todayLog(h)
-              const doneToday = log?.status === 'done'
-              return (
-                <li
-                  key={h._id}
-                  className="flex flex-col gap-2 rounded-2xl border border-white/5 bg-white/[0.01] px-5 py-4 backdrop-blur-sm hover:bg-white/[0.02] transition"
-                >
+      {loading ? (
+        <p className="text-center text-sm text-ink-tertiary">Loading habits…</p>
+      ) : habits.length === 0 ? (
+        <EmptyState title="No habits yet" description="Add your first one above." />
+      ) : (
+        <ul className="space-y-2.5">
+          {habits.map((h) => {
+            const log = todayLog(h)
+            const doneToday = log?.status === 'done'
+            return (
+              <li key={h._id}>
+                <Card padding="px-5 py-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="flex flex-wrap items-center gap-2 truncate font-medium text-white">
+                      <p className="flex flex-wrap items-center gap-2 truncate font-medium text-ink">
                         <span className="truncate">{h.name}</span>
                         <span
-                          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-orange-500/30 bg-orange-950/40 px-2 py-0.5 text-xs font-semibold tabular-nums text-orange-100"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-chip bg-warning-soft px-2 py-0.5 text-xs font-semibold tabular-nums text-warning"
                           title="Current streak (consecutive done days)"
                         >
-                          <span aria-hidden>🔥</span>
+                          <FlameIcon className="h-3 w-3" />
                           {h.streak ?? 0}
                         </span>
                       </p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-ink-tertiary">
                         {doneToday ? (
-                          <span className="text-emerald-400/90">Done today</span>
+                          <span className="inline-flex items-center gap-1 text-success">
+                            <CheckCircleIcon className="h-3 w-3" /> Done today
+                          </span>
                         ) : log?.status === 'missed' ? (
-                          <span className="text-amber-400/90">Missed today</span>
+                          <span className="text-priority-medium">Missed today</span>
                         ) : (
                           'Not logged today'
                         )}
                       </p>
                     </div>
-                    <button
+                    <Button
                       type="button"
+                      variant={doneToday ? 'secondary' : 'primary'}
                       disabled={doneToday || savingId === h._id}
                       onClick={() => markDone(h._id)}
-                      className="shrink-0 rounded-xl border border-emerald-700/40 bg-emerald-950/40 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="shrink-0"
                     >
                       {savingId === h._id ? '…' : doneToday ? 'Done' : 'Mark done'}
-                    </button>
+                    </Button>
                   </div>
                   <HabitActivityGrid logs={h.logs} />
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </div>
+                </Card>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }

@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { apiFetch } from '../lib/api'
-import { MessageIcon } from './Icons'
+import { SparkleIcon } from './Icons'
+import AISurface from './ui/AISurface'
+import Button from './ui/Button'
+import Spinner from './ui/Spinner'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -64,54 +67,45 @@ export default function AgentSuggestion({ onTaskUpdated }) {
   }
 
   return (
-    <div className="mb-6 rounded-2xl border border-white/10 bg-slate-900/40 p-4 shadow-lg backdrop-blur-md">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400">
-            <MessageIcon className="h-4 w-4" />
+    <AISurface padding="p-5" className="mb-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-ai text-white">
+            <SparkleIcon className="h-3.5 w-3.5" />
           </div>
-          <h2 className="text-sm font-semibold text-slate-200">Agentic Insight</h2>
+          <h2 className="text-sm font-semibold text-ink">Agentic Insight</h2>
         </div>
         {!analysis && !loading && (
-          <button 
-            onClick={analyzeDay}
-            className="rounded-lg bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-400 hover:bg-indigo-500/20 transition"
-          >
+          <Button variant="ai" size="sm" onClick={analyzeDay}>
             Analyze My Day
-          </button>
+          </Button>
         )}
       </div>
 
       {loading && (
-        <div className="mt-4 animate-pulse space-y-2">
-          <div className="h-4 w-3/4 rounded bg-slate-700/50"></div>
-          <div className="h-4 w-1/2 rounded bg-slate-700/50"></div>
+        <div className="mt-4 flex items-center gap-2 text-sm text-ink-tertiary">
+          <Spinner />
+          Thinking…
         </div>
       )}
 
-      {error && <p className="mt-4 text-xs text-rose-400">{error}</p>}
+      {error && <p className="mt-4 text-xs text-danger">{error}</p>}
 
       {analysis && !loading && (
         <div className="mt-4">
-          <p className="text-sm text-slate-300">{analysis.suggestion}</p>
+          <p className="text-sm leading-relaxed text-ink-secondary">{analysis.suggestion}</p>
           {analysis.actionable && analysis.suggestedTaskId && (
-            <div className="mt-4 flex gap-3">
-              <button 
-                onClick={handleAction}
-                className="rounded-lg bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/30 transition"
-              >
+            <div className="mt-4 flex gap-2">
+              <Button variant="ai" size="sm" onClick={handleAction}>
                 {analysis.suggestedAction === 'reschedule_tomorrow' ? 'Move to Tomorrow' : 'Apply Suggestion'}
-              </button>
-              <button 
-                onClick={() => setAnalysis(null)}
-                className="rounded-lg bg-white/5 px-4 py-2 text-xs font-medium text-slate-400 hover:bg-white/10 transition"
-              >
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setAnalysis(null)}>
                 Dismiss
-              </button>
+              </Button>
             </div>
           )}
         </div>
       )}
-    </div>
+    </AISurface>
   )
 }

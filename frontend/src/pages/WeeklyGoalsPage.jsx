@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatWeekRangeLabel, weekStartMondayLocal } from '../utils/date'
 import { apiFetch } from '../lib/api'
+import Card from '../components/ui/Card'
+import Button from '../components/ui/Button'
+import Input from '../components/ui/Input'
+import EmptyState from '../components/ui/EmptyState'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -13,17 +17,12 @@ function clamp(n) {
 function ProgressBar({ value, busy }) {
   const v = clamp(value)
   return (
-    <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-800/90 ring-1 ring-white/5">
+    <div className="relative h-2 w-full overflow-hidden rounded-full bg-surface-tertiary">
       <div
-        className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-indigo-400 transition-[width] duration-300 ease-out"
+        className="absolute inset-y-0 left-0 rounded-full bg-accent transition-[width] duration-300 ease-out"
         style={{ width: `${v}%` }}
       />
-      {busy && (
-        <div
-          className="pointer-events-none absolute inset-0 bg-slate-950/25"
-          aria-hidden
-        />
-      )}
+      {busy && <div className="pointer-events-none absolute inset-0 bg-surface/40" aria-hidden />}
     </div>
   )
 }
@@ -34,42 +33,25 @@ function RingGauge({ value }) {
   const c = 2 * Math.PI * r
   const offset = c * (1 - v / 100)
   return (
-    <div className="relative flex h-28 w-28 items-center justify-center">
-      <svg className="-rotate-90 transform" width="112" height="112" viewBox="0 0 112 112">
+    <div className="relative flex h-24 w-24 items-center justify-center">
+      <svg className="-rotate-90 transform" width="96" height="96" viewBox="0 0 96 96">
+        <circle cx="48" cy="48" r={r} fill="none" stroke="currentColor" strokeWidth="7" className="text-surface-tertiary" />
         <circle
-          cx="56"
-          cy="56"
+          cx="48"
+          cy="48"
           r={r}
           fill="none"
           stroke="currentColor"
-          strokeWidth="8"
-          className="text-slate-800"
-        />
-        <circle
-          cx="56"
-          cy="56"
-          r={r}
-          fill="none"
-          stroke="url(#wg)"
-          strokeWidth="8"
+          strokeWidth="7"
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={offset}
-          className="transition-[stroke-dashoffset] duration-500 ease-out"
+          className="text-accent transition-[stroke-dashoffset] duration-500 ease-out"
         />
-        <defs>
-          <linearGradient id="wg" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#a78bfa" />
-            <stop offset="55%" stopColor="#e879f9" />
-            <stop offset="100%" stopColor="#818cf8" />
-          </linearGradient>
-        </defs>
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-semibold tabular-nums text-white">{v}</span>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-          avg
-        </span>
+        <span className="text-xl font-semibold tabular-nums text-ink">{v}</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-tertiary">avg</span>
       </div>
     </div>
   )
@@ -173,99 +155,81 @@ export default function WeeklyGoalsPage() {
   }
 
   return (
-    <div className="px-4 py-8 sm:px-6 lg:px-10">
-      <div className="mx-auto max-w-3xl">
-        <header className="mb-10 flex flex-col gap-8 border-b border-slate-800/80 pb-10 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-violet-300/90">
-              Weekly goals
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              This week
-            </h1>
-            <p className="mt-2 text-sm text-slate-400">{weekLabel}</p>
-            <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-500">
-              Set a few outcomes for the week and nudge progress as you ship. Weeks start on
-              Monday.
-            </p>
-          </div>
-          <div className="flex items-center gap-6 rounded-2xl border border-slate-800/80 bg-slate-900/40 px-6 py-5">
-            <RingGauge value={avgProgress} />
-            <dl className="min-w-0 space-y-2 text-sm">
-              <div>
-                <dt className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
-                  Goals
-                </dt>
-                <dd className="text-lg font-semibold text-white">{goals.length}</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
-                  Week id
-                </dt>
-                <dd className="truncate font-mono text-xs text-slate-400">{weekKey}</dd>
-              </div>
-            </dl>
-          </div>
-        </header>
-
-        <section className="mb-10 rounded-2xl border border-slate-800/80 bg-slate-900/35 p-5 shadow-xl shadow-black/25 backdrop-blur-md">
-          <h2 className="text-sm font-semibold text-white">Add a weekly goal</h2>
-          <form onSubmit={addGoal} className="mt-4 flex flex-col gap-3 sm:flex-row">
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Ship v1 of the planner"
-              className="min-w-0 flex-1 rounded-xl border border-slate-700/80 bg-slate-950/70 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-violet-500/45 focus:outline-none focus:ring-2 focus:ring-violet-500/15"
-            />
-                <input
-                  type="number"
-                  min={1}
-                  value={target}
-                  onChange={(e) => setTarget(Math.max(1, Number(e.target.value) || 1))}
-                  className="w-28 rounded-xl border border-slate-700/80 bg-slate-950/70 px-3 py-3 text-sm text-white focus:border-violet-500/45 focus:outline-none focus:ring-2 focus:ring-violet-500/15"
-                  aria-label="Goal target"
-                />
-            <button
-              type="submit"
-              className="shrink-0 rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 active:bg-violet-700"
-            >
-              Add goal
-            </button>
-          </form>
-        </section>
-
-        {error && (
-          <p
-            className="mb-6 rounded-xl border border-red-900/40 bg-red-950/30 px-4 py-3 text-sm text-red-200"
-            role="alert"
-          >
-            {error}
+    <div className="mx-auto max-w-3xl">
+      <header className="mb-8 flex flex-col gap-6 border-b border-border pb-8 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-tertiary">
+            Weekly goals
           </p>
-        )}
+          <h1 className="mt-1.5 text-display text-ink">This week</h1>
+          <p className="mt-2 text-sm text-ink-secondary">{weekLabel}</p>
+          <p className="mt-3 max-w-md text-sm leading-relaxed text-ink-tertiary">
+            Set a few outcomes for the week and nudge progress as you ship. Weeks start on Monday.
+          </p>
+        </div>
+        <Card className="flex items-center gap-5" padding="px-6 py-5">
+          <RingGauge value={avgProgress} />
+          <dl className="min-w-0 space-y-2 text-sm">
+            <div>
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary">Goals</dt>
+              <dd className="text-lg font-semibold text-ink">{goals.length}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary">Week id</dt>
+              <dd className="truncate font-mono text-xs text-ink-tertiary">{weekKey}</dd>
+            </div>
+          </dl>
+        </Card>
+      </header>
 
-        {loading ? (
-          <p className="text-sm text-slate-500">Loading goals…</p>
-        ) : goals.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-800 py-16 text-center">
-            <p className="text-sm text-slate-500">No goals for this week yet.</p>
-          </div>
-        ) : (
-          <ul className="space-y-5">
-            {goals.map((g) => {
-              const val = displayProgress(g)
-              const targetValue = Math.max(1, Number(g.target) || 100)
-              const pct = Math.min(100, Math.round((val / targetValue) * 100))
-              const busy = savingId === g._id
-              return (
-                <li
-                  key={g._id}
-                  className="rounded-2xl border border-slate-800/80 bg-gradient-to-br from-slate-900/80 via-slate-900/50 to-slate-950/80 p-5 shadow-lg shadow-black/20"
-                >
+      <Card className="mb-8">
+        <h2 className="text-sm font-semibold text-ink">Add a weekly goal</h2>
+        <form onSubmit={addGoal} className="mt-4 flex flex-col gap-3 sm:flex-row">
+          <Input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Ship v1 of the planner"
+            className="min-w-0 flex-1"
+          />
+          <Input
+            type="number"
+            min={1}
+            value={target}
+            onChange={(e) => setTarget(Math.max(1, Number(e.target.value) || 1))}
+            className="w-28"
+            aria-label="Goal target"
+          />
+          <Button type="submit" className="shrink-0">
+            Add goal
+          </Button>
+        </form>
+      </Card>
+
+      {error && (
+        <p className="mb-6 rounded-control border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger" role="alert">
+          {error}
+        </p>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-ink-tertiary">Loading goals…</p>
+      ) : goals.length === 0 ? (
+        <EmptyState title="No goals for this week yet" />
+      ) : (
+        <ul className="space-y-4">
+          {goals.map((g) => {
+            const val = displayProgress(g)
+            const targetValue = Math.max(1, Number(g.target) || 100)
+            const pct = Math.min(100, Math.round((val / targetValue) * 100))
+            const busy = savingId === g._id
+            return (
+              <li key={g._id}>
+                <Card>
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium leading-snug text-white">{g.title}</p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="font-medium leading-snug text-ink">{g.title}</p>
+                      <p className="mt-1 text-xs text-ink-tertiary">
                         Progress: {val}/{targetValue} ({pct}%)
                       </p>
                     </div>
@@ -295,15 +259,15 @@ export default function WeeklyGoalsPage() {
                             })
                           }
                         }}
-                        className="w-20 rounded-lg border border-slate-700 bg-slate-950/80 px-2 py-2 text-center text-sm font-semibold tabular-nums text-white focus:border-violet-500/50 focus:outline-none focus:ring-2 focus:ring-violet-500/15 disabled:opacity-50"
+                        className="w-20 rounded-control border border-border-strong bg-surface px-2 py-2 text-center text-sm font-semibold tabular-nums text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15 disabled:opacity-50"
                       />
-                      <span className="text-sm font-medium text-slate-500">pts</span>
+                      <span className="text-sm font-medium text-ink-tertiary">pts</span>
                     </div>
                   </div>
                   <div className="mt-4 space-y-2">
-                    <div className="flex items-center justify-between text-xs text-slate-500">
+                    <div className="flex items-center justify-between text-xs text-ink-tertiary">
                       <span>Progress</span>
-                      <span className="tabular-nums text-slate-400">{val}/{targetValue}</span>
+                      <span className="tabular-nums text-ink-secondary">{val}/{targetValue}</span>
                     </div>
                     <ProgressBar value={pct} busy={busy} />
                     <input
@@ -320,16 +284,16 @@ export default function WeeklyGoalsPage() {
                         const n = clamp(e.currentTarget.value)
                         void patchProgress(g._id, n)
                       }}
-                      className="mt-1 h-2 w-full cursor-pointer accent-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="mt-1 h-2 w-full cursor-pointer accent-accent disabled:cursor-not-allowed disabled:opacity-50"
                       aria-label={`Adjust progress for ${g.title}`}
                     />
                   </div>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </div>
+                </Card>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }

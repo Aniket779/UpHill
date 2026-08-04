@@ -1,12 +1,59 @@
+@import '@fontsource-variable/inter/standard.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   html, body {
-    @apply bg-slate-950 text-slate-100 antialiased selection:bg-sky-500/30;
-    /* Deep space radial gradient */
-    background-image: radial-gradient(ellipse at top right, rgba(30, 41, 59, 0.5) 0%, rgba(2, 6, 23, 1) 70%);
-    background-attachment: fixed;
+    @apply bg-bg text-ink antialiased selection:bg-accent/15;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #D4D4D8;
+    border-radius: 999px;
+    border: 2px solid #FAFAFA;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #A1A1AA;
+  }
+}
+
+@layer utilities {
+  /*
+   * A thin, subtle gradient border used exclusively on AI-generated
+   * surfaces (Coach, Chat, agentic insights) so intelligence-driven
+   * content is instantly recognizable without relying on a loud fill,
+   * gradient background, or glow.
+   */
+  .ai-ring {
+    position: relative;
+    isolation: isolate;
+  }
+  .ai-ring::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, #A78BFA, #818CF8 45%, #C4B5FD);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
   }
 }

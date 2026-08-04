@@ -5,9 +5,9 @@ import { useSocket } from '../hooks/useSocket'
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
 const COLUMNS = [
-  { id: 'todo', title: 'To Do', color: 'border-slate-700/50 bg-slate-900/40 text-slate-400' },
-  { id: 'in-progress', title: 'In Progress', color: 'border-sky-500/30 bg-sky-950/30 text-sky-400' },
-  { id: 'done', title: 'Done', color: 'border-emerald-500/30 bg-emerald-950/30 text-emerald-400' }
+  { id: 'todo', title: 'To Do', color: 'border-border bg-surface-secondary text-ink-secondary' },
+  { id: 'in-progress', title: 'In Progress', color: 'border-accent-border bg-accent-soft text-accent' },
+  { id: 'done', title: 'Done', color: 'border-success-border bg-success-soft text-success' },
 ]
 
 export default function KanbanPage() {
@@ -93,73 +93,71 @@ export default function KanbanPage() {
 
   return (
     <div className="mx-auto max-w-7xl h-[calc(100vh-6rem)] flex flex-col">
-      <header className="mb-8 shrink-0">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fuchsia-400/90">
+      <header className="mb-6 shrink-0">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-tertiary">
           Global Board
         </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-          Kanban
-        </h1>
-        <p className="mt-2 text-sm text-slate-400">
+        <h1 className="mt-1.5 text-display text-ink">Kanban</h1>
+        <p className="mt-2 text-sm text-ink-tertiary">
           Drag and drop tasks across stages. Syncs instantly with your Today planner.
         </p>
       </header>
 
       {error && (
-        <p className="mb-4 rounded-xl border border-red-900/40 bg-red-950/30 px-4 py-3 text-sm text-red-200 shrink-0">
+        <p className="mb-4 rounded-control border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger shrink-0">
           {error}
         </p>
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading board…</p>
+        <p className="text-sm text-ink-tertiary">Loading board…</p>
       ) : (
-        <div className="flex-1 flex gap-6 overflow-x-auto pb-4 [&::-webkit-scrollbar]:hidden">
+        <div className="flex-1 flex gap-5 overflow-x-auto pb-4 [&::-webkit-scrollbar]:hidden">
           {COLUMNS.map(col => {
             const colTasks = tasks.filter(t => t.status === col.id || (!t.status && col.id === (t.completed ? 'done' : 'todo')))
             return (
-              <div 
-                key={col.id} 
-                className="flex-1 min-w-[320px] flex flex-col rounded-3xl border border-white/5 bg-white/[0.01] backdrop-blur-md p-4"
+              <div
+                key={col.id}
+                className="flex-1 min-w-[300px] flex flex-col rounded-card border border-border bg-surface-secondary/50 p-3"
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, col.id)}
               >
-                <div className={`mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider ${col.color}`}>
-                  {col.title} <span className="opacity-60">{colTasks.length}</span>
+                <div className={`mb-3 inline-flex items-center gap-2 self-start rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${col.color}`}>
+                  {col.title} <span className="opacity-60 tabular-nums">{colTasks.length}</span>
                 </div>
-                
-                <div className="flex-1 overflow-y-auto space-y-3 [&::-webkit-scrollbar]:hidden pr-1">
+
+                <div className="flex-1 overflow-y-auto space-y-2.5 [&::-webkit-scrollbar]:hidden pr-1">
                   {colTasks.map(t => (
                     <div
                       key={t._id}
                       draggable
                       onDragStart={(e) => handleDragStart(e, t._id)}
-                      className={`cursor-grab active:cursor-grabbing rounded-2xl border p-4 shadow-lg transition hover:-translate-y-1 ${
-                        t.priority === 'high' 
-                          ? 'border-rose-500/30 bg-rose-950/20 shadow-[inset_2px_0_0_0_rgba(244,63,94,0.6)]'
+                      className={`cursor-grab active:cursor-grabbing rounded-card border bg-surface p-3.5 shadow-card transition hover:-translate-y-0.5 hover:shadow-popover ${
+                        t.priority === 'high'
+                          ? 'border-l-[3px] border-l-priority-high border-border'
                           : t.priority === 'medium'
-                          ? 'border-amber-500/20 bg-amber-950/10 shadow-[inset_2px_0_0_0_rgba(245,158,11,0.5)]'
-                          : 'border-white/5 bg-white/[0.02]'
+                          ? 'border-l-[3px] border-l-priority-medium border-border'
+                          : 'border-border'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <p className={`text-sm font-medium leading-snug ${t.completed ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
+                        <p className={`text-sm font-medium leading-snug ${t.completed ? 'text-ink-tertiary line-through' : 'text-ink'}`}>
                           {t.title}
                         </p>
-                        <span className={`shrink-0 rounded bg-white/5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest ${
-                          t.priority === 'high' ? 'text-rose-400' : t.priority === 'medium' ? 'text-amber-400' : 'text-slate-500'
+                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest ${
+                          t.priority === 'high' ? 'bg-priority-high-soft text-priority-high' : t.priority === 'medium' ? 'bg-priority-medium-soft text-priority-medium' : 'bg-surface-secondary text-ink-tertiary'
                         }`}>
                           {t.priority}
                         </span>
                       </div>
-                      <div className="mt-3 flex items-center gap-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
-                        {t.date && <span className="rounded-md border border-white/5 bg-slate-900/50 px-2 py-1">{t.date}</span>}
-                        {t.category && <span className="rounded-md border border-white/5 bg-slate-900/50 px-2 py-1">{t.category}</span>}
+                      <div className="mt-2.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-ink-tertiary font-medium">
+                        {t.date && <span className="rounded bg-surface-secondary px-1.5 py-0.5">{t.date}</span>}
+                        {t.category && <span className="rounded bg-surface-secondary px-1.5 py-0.5">{t.category}</span>}
                       </div>
                     </div>
                   ))}
                   {colTasks.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-white/5 py-10 text-center text-sm text-slate-600">
+                    <div className="rounded-card border border-dashed border-border-strong py-10 text-center text-sm text-ink-tertiary">
                       Drop tasks here
                     </div>
                   )}

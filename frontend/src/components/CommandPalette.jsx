@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { SearchIcon, SunIcon, CalendarIcon, MessageIcon, TargetIcon, UserIcon, BarChartIcon, CheckCircleIcon } from './Icons'
+import { SearchIcon, SunIcon, CalendarIcon, MessageIcon, TargetIcon, UserIcon, BarChartIcon, CheckCircleIcon, PlusIcon } from './Icons'
 import { apiFetch } from '../lib/api'
 import { todayLocalString } from '../utils/date'
 
@@ -116,19 +116,19 @@ export default function CommandPalette() {
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4">
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
+      <div
+        className="fixed inset-0 bg-ink/20 backdrop-blur-sm transition-opacity"
         onClick={() => setIsOpen(false)}
       />
-      
+
       {/* Modal */}
-      <div className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-white/10 bg-slate-900/90 shadow-2xl backdrop-blur-xl">
-        <div className="flex items-center border-b border-white/5 px-4 py-3">
-          <SearchIcon className="h-5 w-5 text-slate-400 shrink-0" />
+      <div className="relative w-full max-w-xl overflow-hidden rounded-card border border-border bg-surface shadow-modal">
+        <div className="flex items-center border-b border-border px-4 py-3">
+          <SearchIcon className="h-4 w-4 text-ink-tertiary shrink-0" />
           <input
             ref={inputRef}
             type="text"
-            className="flex-1 bg-transparent px-4 text-sm text-white placeholder:text-slate-500 focus:outline-none"
+            className="flex-1 bg-transparent px-3 text-sm text-ink placeholder:text-ink-tertiary focus:outline-none"
             placeholder="Type a command or search..."
             value={query}
             onChange={(e) => {
@@ -138,7 +138,7 @@ export default function CommandPalette() {
             onKeyDown={handleKeyDown}
             disabled={isSubmitting}
           />
-          <div className="flex shrink-0 items-center gap-1 rounded bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 border border-white/10">
+          <div className="flex shrink-0 items-center gap-1 rounded border border-border-strong bg-surface-secondary px-1.5 py-0.5 text-[10px] font-medium text-ink-tertiary">
             ESC
           </div>
         </div>
@@ -152,30 +152,30 @@ export default function CommandPalette() {
                   key={item.id}
                   onClick={() => executeAction(item)}
                   onMouseEnter={() => setSelectedIndex(index)}
-                  className={`flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition-colors ${
-                    isSelected ? 'bg-indigo-500/10 text-indigo-100' : 'text-slate-400 hover:bg-white/5'
+                  className={`flex cursor-pointer items-center gap-3 rounded-control px-3 py-2.5 transition-colors ${
+                    isSelected ? 'bg-accent-soft text-accent' : 'text-ink-secondary hover:bg-surface-secondary'
                   }`}
                 >
                   {item.icon ? (
-                    <item.icon className={`h-4 w-4 ${isSelected ? 'text-indigo-400' : 'text-slate-500'}`} />
+                    <item.icon className={`h-4 w-4 shrink-0 ${isSelected ? 'text-accent' : 'text-ink-tertiary'}`} />
                   ) : (
-                    <div className={`flex h-5 w-5 items-center justify-center rounded bg-indigo-500/20 text-[10px] font-bold text-indigo-400`}>
-                      +
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-accent-soft text-accent">
+                      <PlusIcon className="h-3 w-3" />
                     </div>
                   )}
                   <span className="text-sm font-medium">{item.title}</span>
                   {isSelected && item.isAction && isSubmitting && (
-                    <span className="ml-auto text-xs text-indigo-400 animate-pulse">Saving...</span>
+                    <span className="ml-auto text-xs text-accent">Saving...</span>
                   )}
                   {isSelected && !item.isAction && (
-                    <span className="ml-auto text-xs text-indigo-400">Jump to</span>
+                    <span className="ml-auto text-xs text-accent">Jump to</span>
                   )}
                 </li>
               )
             })}
           </ul>
         ) : (
-          <div className="p-8 text-center text-sm text-slate-500">
+          <div className="p-8 text-center text-sm text-ink-tertiary">
             No results found.
           </div>
         )}

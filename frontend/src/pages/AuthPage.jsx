@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/useAuth'
+import { LogoMark } from '../components/Icons'
+import Input from '../components/ui/Input'
+import Button from '../components/ui/Button'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -43,56 +46,64 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl shadow-black/30">
-        <h1 className="text-2xl font-semibold text-white">
-          {mode === 'login' ? 'Login' : 'Create account'}
-        </h1>
-        <p className="mt-2 text-sm text-slate-400">Secure session-based sign-in.</p>
+    <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-10">
+      <div className="w-full max-w-[380px]">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <LogoMark className="h-5 w-5" />
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight text-ink">
+            {mode === 'login' ? 'Welcome back' : 'Create your account'}
+          </h1>
+          <p className="mt-1.5 text-sm text-ink-tertiary">
+            {mode === 'login' ? 'Sign in to continue to UpHill.' : 'Start planning with UpHill.'}
+          </p>
+        </div>
 
-        <form onSubmit={submit} className="mt-6 space-y-3">
-          {mode === 'register' && (
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Name"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+        <div className="rounded-card border border-border bg-surface p-6 shadow-card">
+          <form onSubmit={submit} className="space-y-3">
+            {mode === 'register' && (
+              <Input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Name"
+                required
+              />
+            )}
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
               required
             />
-          )}
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-            required
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-            required
-          />
-          {error && <p className="text-sm text-rose-300">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            {loading ? 'Please wait…' : mode === 'login' ? 'Login' : 'Sign up'}
-          </button>
-        </form>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              required
+            />
+            {error && (
+              <p className="rounded-control bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>
+            )}
+            <Button type="submit" disabled={loading} className="w-full" size="lg">
+              {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Sign up'}
+            </Button>
+          </form>
+        </div>
 
         <button
           type="button"
           onClick={() => setMode((m) => (m === 'login' ? 'register' : 'login'))}
-          className="mt-4 text-sm text-sky-300"
+          className="mt-5 w-full text-center text-sm text-ink-tertiary transition-colors hover:text-accent"
         >
-          {mode === 'login' ? 'Need an account? Sign up' : 'Already have an account? Login'}
+          {mode === 'login' ? (
+            <>Need an account? <span className="font-medium text-accent">Sign up</span></>
+          ) : (
+            <>Already have an account? <span className="font-medium text-accent">Log in</span></>
+          )}
         </button>
       </div>
     </main>
