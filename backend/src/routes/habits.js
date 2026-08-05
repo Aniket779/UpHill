@@ -1,17 +1,29 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Habit = require('../models/Habit');
-const { todayLocalString, addDaysYmd, parseYmdLocal } = require('../lib/dates');
+const { todayLocalString, parseYmdLocal } = require('../lib/dates');
 const { applyXpDelta, HABIT_XP } = require('../lib/xp');
+const { applyGoalProgressDelta } = require('../lib/goalProgress');
+const { previousScheduledDate } = require('../lib/habitLogs');
 
 const router = express.Router();
+
+function parseScheduledDays(raw) {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+}
 
 router.post('/', async (req, res) => {
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
   if (!name) {
     return res.status(400).json({ error: 'name is required' });
   }
-  const habit = await Habit.create({ userId: req.user.sub, name });
+  const scheduledDays = parseScheduledDays(req.body?.scheduledDays);
+  const goalId =
+    typeof req.body?.goalId === 'string' && mongoose.Types.ObjectId.isValid(req.body.goalId)
+      ? req.body.goalId
+      : null;
+  const habit = await Habit.create({ userId: req.user.sub, name, scheduledDays, goalId });
   return res.status(201).json(habit);
 });
 
@@ -37,6 +49,53 @@ router.get('/streaks', async (req, res) => {
 router.get('/', async (req, res) => {
   const habits = await Habit.find({ userId: req.user.sub }).sort({ createdAt: -1 }).lean();
   return res.json(habits);
+});
+
+router.patch('/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: 'invalid habit id' });
+  }
+  const patch = {};
+  if (req.body?.scheduledDays !== undefined) {
+    patch.scheduledDays = parseScheduledDays(req.body.scheduledDays);
+  }
+  if (typeof req.body?.goalId === 'string' && mongoose.Types.ObjectId.isValid(req.body.goalId)) {
+    patch.goalId = req.body.goalId;
+  }
+  if (req.body?.goalId === null) patch.goalId = null;
+
+  if (Object.keys(patch).length === 0) {
+    return res.status(400).json({ error: 'no valid fields to update' });
+  }
+
+  const habit = await Habit.findOneAndUpdate({ _id: id, userId: req.user.sub }, patch, {
+    returnDocument: 'after',
+  });
+  if (!habit) {
+    return res.status(404).json({ error: 'habit not found' });
+  }
+
+  const io = req.app.locals.io;
+  if (io) io.to(`user:${req.user.sub}`).emit('habit:updated', habit);
+
+  return res.json(habit);
+});
+
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: 'invalid habit id' });
+  }
+  const habit = await Habit.findOneAndDelete({ _id: id, userId: req.user.sub });
+  if (!habit) {
+    return res.status(404).json({ error: 'habit not found' });
+  }
+
+  const io = req.app.locals.io;
+  if (io) io.to(`user:${req.user.sub}`).emit('habit:deleted', { _id: habit._id });
+
+  return res.status(204).send();
 });
 
 router.post('/:id/log', async (req, res) => {
@@ -67,11 +126,11 @@ router.post('/:id/log', async (req, res) => {
   }
 
   if (status === 'done' && priorStatus !== 'done') {
-    const yStr = addDaysYmd(date, -1);
-    const yEntry = habit.logs.find((l) => l.date === yStr);
-    const yesterdayDone = yEntry?.status === 'done';
-    habit.streak = yesterdayDone ? (habit.streak || 0) + 1 : 1;
-    habit.lastCompletedDate = parseYmdLocal(date);
+    const prevScheduled = previousScheduledDate(habit.scheduledDays, date);
+    const prevEntry = habit.logs.find((l) => l.date === prevScheduled);
+    const prevDone = prevEntry?.status === 'done';
+    habit.streak = prevDone ? (habit.streak || 0) + 1 : 1;
+    habit.lastCompletedDate = require('../lib/dates').parseYmdLocal(date);
   } else if (status === 'missed') {
     habit.streak = 0;
     habit.lastCompletedDate = null;
@@ -81,20 +140,22 @@ router.post('/:id/log', async (req, res) => {
 
   const io = req.app.locals.io;
 
-  // Handle Gamification XP
-  if (priorStatus !== status) {
-    let xpDelta = 0;
-    if (status === 'done') {
-      xpDelta = HABIT_XP;
-    } else if (priorStatus === 'done' && status === 'missed') {
-      xpDelta = -HABIT_XP;
-    }
+  // Handle Gamification XP + linked-goal progress
+  let direction = 0;
+  if (status === 'done' && priorStatus !== 'done') direction = 1;
+  else if (priorStatus === 'done' && status === 'missed') direction = -1;
+
+  if (direction !== 0) {
+    const xpDelta = direction * HABIT_XP;
     await applyXpDelta({
       io,
       userId: req.user.sub,
       delta: xpDelta,
       message: xpDelta > 0 ? `Completed habit (+${xpDelta} XP)` : `Missed habit (${xpDelta} XP)`,
     });
+    if (habit.goalId) {
+      await applyGoalProgressDelta({ io, userId: req.user.sub, goalId: habit.goalId, delta: direction });
+    }
   }
 
   // Emit real-time event to this user's connected clients only

@@ -2,17 +2,25 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { todayLocalString } from '../utils/date'
 import { apiFetch } from '../lib/api'
 import { useSocket } from '../hooks/useSocket'
-import { FlameIcon, CheckCircleIcon } from '../components/Icons'
+import { FlameIcon, CheckCircleIcon, TrashIcon, TargetIcon } from '../components/Icons'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
+import Select from '../components/ui/Select'
 import EmptyState from '../components/ui/EmptyState'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
+const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 function todayLog(habit) {
   const t = todayLocalString()
   return habit.logs?.find((l) => l.date === t)
+}
+
+function scheduleLabel(scheduledDays) {
+  if (!scheduledDays || scheduledDays.length === 0 || scheduledDays.length === 7) return null
+  return scheduledDays.map((d) => DAY_NAMES[d]).join('/')
 }
 
 function HabitActivityGrid({ logs }) {
@@ -62,7 +70,10 @@ function HabitActivityGrid({ logs }) {
 
 export default function HabitsPage() {
   const [habits, setHabits] = useState([])
+  const [goals, setGoals] = useState([])
   const [name, setName] = useState('')
+  const [scheduleDays, setScheduleDays] = useState([])
+  const [goalId, setGoalId] = useState('')
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState(null)
   const [error, setError] = useState(null)
@@ -91,14 +102,38 @@ export default function HabitsPage() {
     }
   }, [load])
 
-  // ── Real-time socket listener ──────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await apiFetch(`${apiBase}/goals`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled && Array.isArray(data)) setGoals(data)
+      } catch {
+        if (!cancelled) setGoals([])
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+  const goalById = useMemo(() => new Map(goals.map((g) => [g._id, g])), [goals])
+
+  // ── Real-time socket listeners ─────────────────────────────────────────────
   useSocket('habit:updated', (updatedHabit) => {
     setHabits((prev) => {
       if (!prev.some((h) => h._id === String(updatedHabit._id))) return prev
       return prev.map((h) => (h._id === String(updatedHabit._id) ? updatedHabit : h))
     })
   })
+
+  useSocket('habit:deleted', ({ _id }) => {
+    setHabits((prev) => prev.filter((h) => h._id !== _id))
+  })
   // ──────────────────────────────────────────────────────────────────────────
+
+  function toggleScheduleDay(dow) {
+    setScheduleDays((prev) => (prev.includes(dow) ? prev.filter((d) => d !== dow) : [...prev, dow].sort()))
+  }
 
   async function addHabit(e) {
     e.preventDefault()
@@ -108,14 +143,27 @@ export default function HabitsPage() {
     const res = await apiFetch(`${apiBase}/habits`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: trimmed }),
+      body: JSON.stringify({ name: trimmed, scheduledDays: scheduleDays, goalId: goalId || null }),
     })
     if (!res.ok) {
       setError('Could not create habit.')
       return
     }
     setName('')
+    setScheduleDays([])
+    setGoalId('')
     await load()
+  }
+
+  async function deleteHabit(id) {
+    if (!window.confirm('Delete this habit? Its history will be lost.')) return
+    setError(null)
+    const res = await apiFetch(`${apiBase}/habits/${id}`, { method: 'DELETE' })
+    if (!res.ok) {
+      setError('Could not delete habit.')
+      return
+    }
+    setHabits((prev) => prev.filter((h) => h._id !== id))
   }
 
   async function markDone(id) {
@@ -148,17 +196,55 @@ export default function HabitsPage() {
       </header>
 
       <Card padding="p-4" className="mb-6">
-        <form onSubmit={addHabit} className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <Input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="New habit name"
-            className="min-w-0 flex-1"
-          />
-          <Button type="submit" className="shrink-0">
-            Add habit
-          </Button>
+        <form onSubmit={addHabit} className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="New habit name"
+              className="min-w-0 flex-1"
+            />
+            <Button type="submit" className="shrink-0">
+              Add habit
+            </Button>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-ink-tertiary">
+                Days
+              </span>
+              <div className="flex gap-1" role="group" aria-label="Scheduled days">
+                {DAY_LABELS.map((label, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => toggleScheduleDay(i)}
+                    aria-pressed={scheduleDays.includes(i)}
+                    title={DAY_NAMES[i]}
+                    className={`flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold transition-colors ${
+                      scheduleDays.includes(i)
+                        ? 'border-accent bg-accent text-white'
+                        : 'border-border-strong bg-surface text-ink-tertiary hover:text-ink-secondary'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-ink-tertiary">
+                {scheduleDays.length === 0 ? '(every day)' : ''}
+              </span>
+            </div>
+            <Select value={goalId} onChange={(e) => setGoalId(e.target.value)} className="sm:w-56">
+              <option value="">no goal</option>
+              {goals.map((g) => (
+                <option key={g._id} value={g._id}>
+                  {g.title}
+                </option>
+              ))}
+            </Select>
+          </div>
         </form>
       </Card>
 
@@ -192,7 +278,7 @@ export default function HabitsPage() {
                           {h.streak ?? 0}
                         </span>
                       </p>
-                      <p className="mt-1 text-xs text-ink-tertiary">
+                      <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-tertiary">
                         {doneToday ? (
                           <span className="inline-flex items-center gap-1 text-success">
                             <CheckCircleIcon className="h-3 w-3" /> Done today
@@ -202,17 +288,38 @@ export default function HabitsPage() {
                         ) : (
                           'Not logged today'
                         )}
+                        {scheduleLabel(h.scheduledDays) && (
+                          <span className="rounded-chip bg-surface-secondary px-2 py-0.5 font-medium text-ink-secondary">
+                            {scheduleLabel(h.scheduledDays)}
+                          </span>
+                        )}
+                        {h.goalId && goalById.get(h.goalId) && (
+                          <span className="inline-flex max-w-[140px] items-center gap-1 truncate rounded-chip bg-accent-soft px-2 py-0.5 font-medium text-accent">
+                            <TargetIcon className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{goalById.get(h.goalId).title}</span>
+                          </span>
+                        )}
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      variant={doneToday ? 'secondary' : 'primary'}
-                      disabled={doneToday || savingId === h._id}
-                      onClick={() => markDone(h._id)}
-                      className="shrink-0"
-                    >
-                      {savingId === h._id ? '…' : doneToday ? 'Done' : 'Mark done'}
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        type="button"
+                        variant={doneToday ? 'secondary' : 'primary'}
+                        disabled={doneToday || savingId === h._id}
+                        onClick={() => markDone(h._id)}
+                      >
+                        {savingId === h._id ? '…' : doneToday ? 'Done' : 'Mark done'}
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => deleteHabit(h._id)}
+                        className="flex h-9 w-9 items-center justify-center rounded-control text-ink-tertiary transition-colors hover:bg-danger-soft hover:text-danger"
+                        aria-label="Delete habit"
+                        title="Delete habit"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   <HabitActivityGrid logs={h.logs} />
                 </Card>

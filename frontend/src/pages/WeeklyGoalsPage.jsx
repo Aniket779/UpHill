@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatWeekRangeLabel, weekStartMondayLocal } from '../utils/date'
 import { apiFetch } from '../lib/api'
+import { useSocket } from '../hooks/useSocket'
+import { TrashIcon, CheckCircleIcon, FlameIcon } from '../components/Icons'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
@@ -62,6 +64,8 @@ export default function WeeklyGoalsPage() {
   const weekLabel = useMemo(() => formatWeekRangeLabel(weekKey), [weekKey])
 
   const [goals, setGoals] = useState([])
+  const [tasks, setTasks] = useState([])
+  const [habits, setHabits] = useState([])
   const [title, setTitle] = useState('')
   const [target, setTarget] = useState(100)
   const [loading, setLoading] = useState(true)
@@ -82,17 +86,71 @@ export default function WeeklyGoalsPage() {
     setGoals(data)
   }, [])
 
+  const loadLinkedItems = useCallback(async () => {
+    try {
+      const [tasksRes, habitsRes] = await Promise.all([
+        apiFetch(`${apiBase}/tasks/board`),
+        apiFetch(`${apiBase}/habits`),
+      ])
+      setTasks(tasksRes.ok ? await tasksRes.json() : [])
+      setHabits(habitsRes.ok ? await habitsRes.json() : [])
+    } catch {
+      setTasks([])
+      setHabits([])
+    }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      await load()
+      await Promise.all([load(), loadLinkedItems()])
       if (!cancelled) setLoading(false)
     })()
     return () => {
       cancelled = true
     }
-  }, [load])
+  }, [load, loadLinkedItems])
+
+  // ── Real-time socket listeners ─────────────────────────────────────────────
+  useSocket('goal:updated', (updatedGoal) => {
+    setGoals((prev) => {
+      if (!prev.some((g) => g._id === updatedGoal._id)) return prev
+      return prev.map((g) => (g._id === updatedGoal._id ? updatedGoal : g))
+    })
+  })
+
+  useSocket('goal:deleted', ({ _id }) => {
+    setGoals((prev) => prev.filter((g) => g._id !== _id))
+  })
+
+  useSocket('task:updated', (updatedTask) => {
+    setTasks((prev) => prev.map((t) => (t._id === updatedTask._id ? updatedTask : t)))
+  })
+
+  useSocket('task:deleted', ({ _id }) => {
+    setTasks((prev) => prev.filter((t) => t._id !== _id))
+  })
+
+  useSocket('habit:updated', (updatedHabit) => {
+    setHabits((prev) => prev.map((h) => (h._id === String(updatedHabit._id) ? updatedHabit : h)))
+  })
+
+  useSocket('habit:deleted', ({ _id }) => {
+    setHabits((prev) => prev.filter((h) => h._id !== _id))
+  })
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async function deleteGoal(id) {
+    if (!window.confirm('Delete this goal? Linked tasks and habits will be unlinked, not deleted.')) return
+    setError(null)
+    const res = await apiFetch(`${apiBase}/goals/${id}`, { method: 'DELETE' })
+    if (!res.ok) {
+      setError('Could not delete goal.')
+      return
+    }
+    setGoals((prev) => prev.filter((g) => g._id !== id))
+  }
 
   const avgProgress = useMemo(() => {
     if (!goals.length) return 0
@@ -223,6 +281,9 @@ export default function WeeklyGoalsPage() {
             const targetValue = Math.max(1, Number(g.target) || 100)
             const pct = Math.min(100, Math.round((val / targetValue) * 100))
             const busy = savingId === g._id
+            const linkedTasks = tasks.filter((t) => t.goalId === g._id)
+            const linkedHabits = habits.filter((h) => h.goalId === g._id)
+            const hasLinked = linkedTasks.length > 0 || linkedHabits.length > 0
             return (
               <li key={g._id}>
                 <Card>
@@ -231,6 +292,12 @@ export default function WeeklyGoalsPage() {
                       <p className="font-medium leading-snug text-ink">{g.title}</p>
                       <p className="mt-1 text-xs text-ink-tertiary">
                         Progress: {val}/{targetValue} ({pct}%)
+                        {hasLinked && (
+                          <span className="ml-2">
+                            · {linkedTasks.filter((t) => t.completed).length}/{linkedTasks.length} tasks
+                            {linkedHabits.length > 0 && `, ${linkedHabits.length} habit${linkedHabits.length === 1 ? '' : 's'}`} linked
+                          </span>
+                        )}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 sm:shrink-0">
@@ -262,6 +329,15 @@ export default function WeeklyGoalsPage() {
                         className="w-20 rounded-control border border-border-strong bg-surface px-2 py-2 text-center text-sm font-semibold tabular-nums text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15 disabled:opacity-50"
                       />
                       <span className="text-sm font-medium text-ink-tertiary">pts</span>
+                      <button
+                        type="button"
+                        onClick={() => deleteGoal(g._id)}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-ink-tertiary transition-colors hover:bg-danger-soft hover:text-danger"
+                        aria-label="Delete goal"
+                        title="Delete goal"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                   <div className="mt-4 space-y-2">
@@ -288,6 +364,25 @@ export default function WeeklyGoalsPage() {
                       aria-label={`Adjust progress for ${g.title}`}
                     />
                   </div>
+                  {hasLinked && (
+                    <div className="mt-4 space-y-1.5 border-t border-border pt-3">
+                      {linkedTasks.map((t) => (
+                        <div key={t._id} className="flex items-center gap-2 text-xs">
+                          <CheckCircleIcon className={`h-3.5 w-3.5 shrink-0 ${t.completed ? 'text-success' : 'text-ink-tertiary'}`} />
+                          <span className={`truncate ${t.completed ? 'text-ink-tertiary line-through' : 'text-ink-secondary'}`}>
+                            {t.title}
+                          </span>
+                        </div>
+                      ))}
+                      {linkedHabits.map((h) => (
+                        <div key={h._id} className="flex items-center gap-2 text-xs">
+                          <FlameIcon className="h-3.5 w-3.5 shrink-0 text-warning" />
+                          <span className="truncate text-ink-secondary">{h.name}</span>
+                          <span className="text-ink-tertiary">· {h.streak ?? 0} day streak</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </Card>
               </li>
             )

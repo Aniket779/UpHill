@@ -9,10 +9,125 @@ import {
   YAxis,
 } from 'recharts'
 import { apiFetch } from '../lib/api'
-import { SparkleIcon } from '../components/Icons'
+import { SparkleIcon, ClockIcon } from '../components/Icons'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import AISurface from '../components/ui/AISurface'
+
+const PRIORITY_TABS = [
+  { id: '', label: 'All' },
+  { id: 'high', label: 'High' },
+  { id: 'medium', label: 'Medium' },
+  { id: 'low', label: 'Low' },
+]
+
+function BestTimeCard() {
+  const [scope, setScope] = useState('')
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const qp = scope ? `?priority=${scope}` : ''
+        const res = await apiFetch(`${apiBase}/insights/best-time${qp}`)
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          if (!cancelled) setError(json.error || 'Could not load this insight.')
+          return
+        }
+        if (!cancelled) setData(json)
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Network error.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [scope])
+
+  const maxCount = data?.buckets?.length ? Math.max(...data.buckets.map((b) => b.count), 1) : 1
+
+  return (
+    <Card className="mb-8">
+      <div className="mb-1 flex items-center gap-2.5">
+        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-soft text-accent shrink-0">
+          <ClockIcon className="h-3.5 w-3.5" />
+        </div>
+        <h2 className="text-sm font-semibold text-ink">When you actually get things done</h2>
+      </div>
+      <p className="ml-9 text-xs text-ink-tertiary">
+        Built from real completion timestamps — not a model, just your own history.
+      </p>
+
+      <div className="mt-5 flex flex-wrap gap-1.5" role="group" aria-label="Priority scope">
+        {PRIORITY_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setScope(t.id)}
+            className={`rounded-control border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              scope === t.id
+                ? 'border-accent bg-accent-soft text-accent'
+                : 'border-border-strong bg-surface text-ink-tertiary hover:text-ink-secondary'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <p className="mt-4 rounded-control border border-danger-border bg-danger-soft px-3 py-2 text-sm text-danger">
+          {error}
+        </p>
+      )}
+
+      {loading ? (
+        <p className="mt-5 text-sm text-ink-tertiary">Loading…</p>
+      ) : data?.insufficientData ? (
+        <p className="mt-5 text-sm text-ink-tertiary">
+          Not enough completed tasks yet ({data.sampleSize} so far — need at least 5). Keep
+          completing tasks and this fills in on its own.
+        </p>
+      ) : data ? (
+        <>
+          {data.recommendation && (
+            <p className="mt-5 rounded-control border border-accent-border bg-accent-soft px-4 py-3 text-sm font-medium text-accent">
+              {data.recommendation}
+            </p>
+          )}
+          {data.usedFilter === null && scope && (
+            <p className="mt-2 text-xs text-ink-tertiary">
+              Not enough {scope}-priority completions yet — showing your overall pattern instead.
+            </p>
+          )}
+          <ul className="mt-5 space-y-2">
+            {data.buckets.map((b) => (
+              <li key={b.id} className="flex items-center gap-3">
+                <span className="w-28 shrink-0 text-xs font-medium text-ink-secondary">{b.label}</span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-tertiary">
+                  <div
+                    className="h-full rounded-full bg-accent transition-[width] duration-300"
+                    style={{ width: `${(b.count / maxCount) * 100}%` }}
+                  />
+                </div>
+                <span className="w-10 shrink-0 text-right text-xs tabular-nums text-ink-tertiary">
+                  {b.pct}%
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 text-xs text-ink-tertiary">Based on {data.sampleSize} completed tasks.</p>
+        </>
+      ) : null}
+    </Card>
+  )
+}
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -248,6 +363,8 @@ export default function InsightsPage() {
 
       {/* Prediction Card */}
       <PredictionCard data={prediction} loading={predictionLoading} />
+
+      <BestTimeCard />
 
       <AISurface className="mb-8" padding="p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

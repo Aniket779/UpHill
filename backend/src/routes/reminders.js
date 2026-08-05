@@ -2,7 +2,7 @@ const express = require('express');
 const Task = require('../models/Task');
 const Habit = require('../models/Habit');
 const { todayLocalString, addDaysYmd } = require('../lib/dates');
-const { countDoneCalendarStreakFrom } = require('../lib/habitLogs');
+const { countDoneCalendarStreakFrom, isScheduledDay } = require('../lib/habitLogs');
 
 const router = express.Router();
 
@@ -51,8 +51,8 @@ router.get('/', async (req, res) => {
       if (todayLog?.status === 'missed') {
         missedToday.push(h.name);
       }
-      if (!todayLog) {
-        const streakThroughYesterday = countDoneCalendarStreakFrom(logs, yesterday);
+      if (!todayLog && isScheduledDay(h.scheduledDays, today)) {
+        const streakThroughYesterday = countDoneCalendarStreakFrom(logs, yesterday, h.scheduledDays);
         if (streakThroughYesterday >= 2) {
           streakAtRisk.push({ name: h.name, days: streakThroughYesterday });
         }

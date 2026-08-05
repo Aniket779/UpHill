@@ -4,7 +4,7 @@ import { formatHeading, todayLocalString, addDays, getShortWeekday, getNumericDa
 import { apiFetch } from '../lib/api'
 import { useSocket } from '../hooks/useSocket'
 import AgentSuggestion from '../components/AgentSuggestion'
-import { CalendarIcon, ClockIcon } from '../components/Icons'
+import { CalendarIcon, ClockIcon, TrashIcon, RepeatIcon, TargetIcon } from '../components/Icons'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
@@ -84,6 +84,9 @@ export default function TodayPage() {
   const [category, setCategory] = useState('general')
   const [tagsInput, setTagsInput] = useState('')
   const [goalId, setGoalId] = useState('')
+  const [repeatOn, setRepeatOn] = useState(false)
+  const [repeatDays, setRepeatDays] = useState([])
+  const [bestTimeHint, setBestTimeHint] = useState(null)
   const [breakdownLoading, setBreakdownLoading] = useState(false)
   const [filterCategory, setFilterCategory] = useState('all')
   const [loading, setLoading] = useState(true)
@@ -157,6 +160,10 @@ export default function TodayPage() {
       return next
     })
   })
+
+  useSocket('task:deleted', ({ _id }) => {
+    setTasks((prev) => prev.filter((t) => t._id !== _id))
+  })
   // ──────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -174,7 +181,23 @@ export default function TodayPage() {
     return () => { cancelled = true }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await apiFetch(`${apiBase}/insights/best-time?priority=${priority}`)
+        const json = await res.json().catch(() => null)
+        if (!cancelled) setBestTimeHint(res.ok && json && !json.insufficientData ? json : null)
+      } catch {
+        if (!cancelled) setBestTimeHint(null)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [priority])
 
+  function toggleRepeatDay(dow) {
+    setRepeatDays((prev) => (prev.includes(dow) ? prev.filter((d) => d !== dow) : [...prev, dow].sort()))
+  }
 
   async function addTask(e) {
     e.preventDefault()
@@ -194,6 +217,7 @@ export default function TodayPage() {
           .map((t) => t.trim())
           .filter(Boolean),
         goalId: goalId || null,
+        recurrence: { active: repeatOn && repeatDays.length > 0, daysOfWeek: repeatDays },
       }),
     })
     if (!res.ok) {
@@ -205,7 +229,20 @@ export default function TodayPage() {
     setCategory('general')
     setTagsInput('')
     setGoalId('')
+    setRepeatOn(false)
+    setRepeatDays([])
     await load()
+  }
+
+  async function deleteTask(id) {
+    if (!window.confirm('Delete this task? This cannot be undone.')) return
+    setError(null)
+    const res = await apiFetch(`${apiBase}/tasks/${id}`, { method: 'DELETE' })
+    if (!res.ok) {
+      setError('Could not delete task.')
+      return
+    }
+    setTasks((prev) => prev.filter((t) => t._id !== id))
   }
 
   async function breakIntoTasks() {
@@ -318,6 +355,8 @@ export default function TodayPage() {
     tasks.forEach((t) => t.category && s.add(t.category))
     return [...s]
   }, [tasks])
+  const goalById = useMemo(() => new Map(goals.map((g) => [g._id, g])), [goals])
+  const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -432,6 +471,48 @@ export default function TodayPage() {
                   Add to today
                 </Button>
               </div>
+              {bestTimeHint?.recommendation && (
+                <p className="flex items-start gap-1.5 rounded-control border border-accent-border bg-accent-soft px-3 py-2 text-xs text-accent">
+                  <ClockIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {bestTimeHint.recommendation}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRepeatOn((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    repeatOn
+                      ? 'border-accent bg-accent-soft text-accent'
+                      : 'border-border-strong bg-surface text-ink-tertiary hover:text-ink-secondary'
+                  }`}
+                >
+                  <RepeatIcon className="h-3.5 w-3.5" />
+                  Repeat
+                </button>
+                {repeatOn && (
+                  <div className="flex gap-1" role="group" aria-label="Repeat on days">
+                    {DAY_LABELS.map((label, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => toggleRepeatDay(i)}
+                        aria-pressed={repeatDays.includes(i)}
+                        className={`flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold transition-colors ${
+                          repeatDays.includes(i)
+                            ? 'border-accent bg-accent text-white'
+                            : 'border-border-strong bg-surface text-ink-tertiary hover:text-ink-secondary'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {repeatOn && repeatDays.length === 0 && (
+                  <span className="text-xs text-ink-tertiary">Pick at least one day</span>
+                )}
+              </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <Select value={category} onChange={(e) => setCategory(e.target.value)}>
                   <option value="general">general</option>
@@ -516,6 +597,20 @@ export default function TodayPage() {
                                     {t.startTime} · {t.duration}m
                                   </span>
                                 )}
+                                {(t.recurringParentId || t.recurrence?.active) && (
+                                  <span
+                                    className="inline-flex items-center gap-1 rounded-chip bg-surface-secondary px-2 py-0.5 text-[11px] font-medium text-ink-secondary"
+                                    title="Recurring task"
+                                  >
+                                    <RepeatIcon className="h-3 w-3" />
+                                  </span>
+                                )}
+                                {t.goalId && goalById.get(t.goalId) && (
+                                  <span className="inline-flex max-w-[140px] items-center gap-1 truncate rounded-chip bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+                                    <TargetIcon className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">{goalById.get(t.goalId).title}</span>
+                                  </span>
+                                )}
                               </div>
                               <p className="mt-1.5 text-sm font-medium leading-snug text-ink">
                                 {t.title}
@@ -539,6 +634,15 @@ export default function TodayPage() {
                             >
                               {patchingId === t._id ? '…' : 'Complete'}
                             </Button>
+                            <button
+                              type="button"
+                              onClick={() => deleteTask(t._id)}
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control text-ink-tertiary transition-colors hover:bg-danger-soft hover:text-danger"
+                              aria-label="Delete task"
+                              title="Delete task"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
                           </div>
                         </li>
                       )
@@ -574,6 +678,15 @@ export default function TodayPage() {
                           <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-ink-tertiary">
                             {t.priority}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => deleteTask(t._id)}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control text-ink-tertiary transition-colors hover:bg-danger-soft hover:text-danger"
+                            aria-label="Delete task"
+                            title="Delete task"
+                          >
+                            <TrashIcon className="h-3.5 w-3.5" />
+                          </button>
                         </li>
                       )
                     })}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiFetch } from '../lib/api'
 import { useSocket } from '../hooks/useSocket'
+import { TrashIcon } from '../components/Icons'
 
 const apiBase = import.meta.env.VITE_API_URL ?? ''
 
@@ -89,7 +90,24 @@ export default function KanbanPage() {
       return prev.map((t) => (t._id === updatedTask._id ? updatedTask : t))
     })
   })
+
+  useSocket('task:deleted', ({ _id }) => {
+    setTasks((prev) => prev.filter((t) => t._id !== _id))
+  })
   // ──────────────────────────────────────────────────────────────────────────
+
+  async function deleteTask(e, id) {
+    e.stopPropagation()
+    if (!window.confirm('Delete this task? This cannot be undone.')) return
+    setError(null)
+    const prevTasks = tasks
+    setTasks((prev) => prev.filter((t) => t._id !== id))
+    const res = await apiFetch(`${apiBase}/tasks/${id}`, { method: 'DELETE' })
+    if (!res.ok) {
+      setError('Could not delete task.')
+      setTasks(prevTasks)
+    }
+  }
 
   return (
     <div className="mx-auto max-w-7xl h-[calc(100vh-6rem)] flex flex-col">
@@ -144,11 +162,22 @@ export default function KanbanPage() {
                         <p className={`text-sm font-medium leading-snug ${t.completed ? 'text-ink-tertiary line-through' : 'text-ink'}`}>
                           {t.title}
                         </p>
-                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest ${
-                          t.priority === 'high' ? 'bg-priority-high-soft text-priority-high' : t.priority === 'medium' ? 'bg-priority-medium-soft text-priority-medium' : 'bg-surface-secondary text-ink-tertiary'
-                        }`}>
-                          {t.priority}
-                        </span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest ${
+                            t.priority === 'high' ? 'bg-priority-high-soft text-priority-high' : t.priority === 'medium' ? 'bg-priority-medium-soft text-priority-medium' : 'bg-surface-secondary text-ink-tertiary'
+                          }`}>
+                            {t.priority}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => deleteTask(e, t._id)}
+                            className="flex h-5 w-5 items-center justify-center rounded text-ink-tertiary transition-colors hover:bg-danger-soft hover:text-danger"
+                            aria-label="Delete task"
+                            title="Delete task"
+                          >
+                            <TrashIcon className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <div className="mt-2.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-ink-tertiary font-medium">
                         {t.date && <span className="rounded bg-surface-secondary px-1.5 py-0.5">{t.date}</span>}

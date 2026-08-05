@@ -2,7 +2,10 @@ const express = require('express');
 const Habit = require('../models/Habit');
 const Task = require('../models/Task');
 const { todayLocalString, addDaysYmd, ymdOffset, parseYmdLocal, lastNDayStrings } = require('../lib/dates');
-const { countDoneCalendarStreakFrom } = require('../lib/habitLogs');
+const { countDoneCalendarStreakFrom, isScheduledDay } = require('../lib/habitLogs');
+const { bucketCompletions } = require('../lib/timeBuckets');
+
+const MIN_SAMPLES_FOR_RECOMMENDATION = 5;
 
 const router = express.Router();
 
@@ -51,8 +54,8 @@ router.get('/reminders', async (req, res) => {
     for (const h of habits) {
       const logs = h.logs || [];
       const todayLog = logs.find((l) => l.date === today);
-      if (!todayLog) {
-        const streakThroughYesterday = countDoneCalendarStreakFrom(logs, yesterday);
+      if (!todayLog && isScheduledDay(h.scheduledDays, today)) {
+        const streakThroughYesterday = countDoneCalendarStreakFrom(logs, yesterday, h.scheduledDays);
         if (streakThroughYesterday >= 2) {
           streakAtRisk.push(h.name);
         }
@@ -439,6 +442,65 @@ router.get('/predictions', async (req, res) => {
   } catch (err) {
     console.error('GET /insights/predictions error:', err);
     return res.status(500).json({ error: 'Failed to compute predictions.' });
+  }
+});
+
+// ─── GET /insights/best-time ──────────────────────────────────────────────────
+// A behavioral recommendation built from real completion timestamps (Task.completedAt),
+// not the AI: bucket every completed task into a time-of-day window and surface the
+// window the user actually finishes work in most often, optionally scoped to a
+// priority/category. Deterministic and instant — no Gemini call needed here.
+
+function buildRecommendation(buckets, sampleSize, scopeLabel) {
+  const top = buckets[0];
+  if (!top || top.count === 0) return null;
+  return `You complete ${scopeLabel} most often in the ${top.label} (${top.range}) — ${top.pct}% of ${sampleSize} completions.`;
+}
+
+router.get('/best-time', async (req, res) => {
+  try {
+    const filter = { userId: req.user.sub, completed: true, completedAt: { $ne: null } };
+    const priority = ['low', 'medium', 'high'].includes(req.query.priority) ? req.query.priority : null;
+    const category =
+      typeof req.query.category === 'string' && req.query.category.trim()
+        ? req.query.category.trim().toLowerCase()
+        : null;
+    if (priority) filter.priority = priority;
+    if (category) filter.category = category;
+
+    let tasks = await Task.find(filter).select('completedAt').lean();
+    let usedFilter = priority || category ? { priority, category } : null;
+
+    // Not enough scoped data — fall back to the user's overall pattern instead of erroring.
+    if ((priority || category) && tasks.length < MIN_SAMPLES_FOR_RECOMMENDATION) {
+      tasks = await Task.find({ userId: req.user.sub, completed: true, completedAt: { $ne: null } })
+        .select('completedAt')
+        .lean();
+      usedFilter = null;
+    }
+
+    if (tasks.length < MIN_SAMPLES_FOR_RECOMMENDATION) {
+      return res.json({ insufficientData: true, sampleSize: tasks.length, usedFilter: null, buckets: [], recommendation: null });
+    }
+
+    const dates = tasks.map((t) => new Date(t.completedAt));
+    const buckets = bucketCompletions(dates);
+    const scopeLabel = usedFilter?.priority
+      ? `${usedFilter.priority}-priority tasks`
+      : usedFilter?.category
+      ? `"${usedFilter.category}" tasks`
+      : 'tasks overall';
+
+    return res.json({
+      insufficientData: false,
+      sampleSize: tasks.length,
+      usedFilter,
+      buckets,
+      recommendation: buildRecommendation(buckets, tasks.length, scopeLabel),
+    });
+  } catch (err) {
+    console.error('GET /insights/best-time error:', err);
+    return res.status(500).json({ error: 'Failed to compute best-time insight.' });
   }
 });
 

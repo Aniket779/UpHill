@@ -1,6 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Goal = require('../models/Goal');
+const Task = require('../models/Task');
+const Habit = require('../models/Habit');
 const { weekStartMondayLocal } = require('../lib/dates');
 
 const router = express.Router();
@@ -78,7 +80,33 @@ router.patch('/:id', async (req, res) => {
   if (!goal) {
     return res.status(404).json({ error: 'goal not found' });
   }
+
+  const io = req.app.locals.io;
+  if (io) io.to(`user:${req.user.sub}`).emit('goal:updated', goal);
+
   return res.json(goal);
+});
+
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: 'invalid goal id' });
+  }
+  const goal = await Goal.findOneAndDelete({ _id: id, userId: req.user.sub });
+  if (!goal) {
+    return res.status(404).json({ error: 'goal not found' });
+  }
+
+  // Clear dangling references on any tasks/habits that were linked to this goal.
+  await Promise.all([
+    Task.updateMany({ userId: req.user.sub, goalId: id }, { goalId: null }),
+    Habit.updateMany({ userId: req.user.sub, goalId: id }, { goalId: null }),
+  ]);
+
+  const io = req.app.locals.io;
+  if (io) io.to(`user:${req.user.sub}`).emit('goal:deleted', { _id: goal._id });
+
+  return res.status(204).send();
 });
 
 module.exports = router;
