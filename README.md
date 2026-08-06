@@ -1,6 +1,8 @@
 # UpHill
 AI-powered personal operating system that combines planning, habit tracking, and behavioral analysis to improve discipline and execution.
 
+**Live app:** [up-hill-three.vercel.app](https://up-hill-three.vercel.app)
+
 ## Running locally
 
 **Option A — Docker Compose** (Mongo, backend, and frontend together):
