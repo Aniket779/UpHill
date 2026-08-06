@@ -1,9 +1,15 @@
 const http = require('http');
+const dns = require('dns');
 const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 const config = require('./config/env');
 const socketAuth = require('./socket/auth');
 const app = require('./app');
+
+// Node's own DNS resolver can fail SRV lookups (mongodb+srv://) against some
+// router/ISP DNS servers even when the OS resolver handles them fine — force
+// a public resolver so the Atlas SRV record always resolves correctly.
+dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 const server = http.createServer(app);
 
